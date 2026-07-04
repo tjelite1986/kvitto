@@ -17,16 +17,17 @@ const SKIP_RE =
   /\b(MOMS|KORT|KONTANT|MASTERCARD|VISA|SWISH|V[ÄA]XEL|KVITTO|ORG\.?\s?NR|TELE?F?O?N?|WWW|TACK|[ÖO]PPET|BRUTTO|NETTO|KASS[AÖO]R?|SJ[ÄA]LVSCAN|MEDLEM|BONUS|SALDO|KUND)\b/i;
 const PANT_RE = /\bPANT\b/i;
 const DISCOUNT_RE = /\b(RABATT|PRISNEDSATT|PRISNEDS|S[ÄA]NKT|EXTRAPRIS|KAMPANJ)\b/i;
-// OCR often reads FÖR as FOR/F0R
-const OFFER_RE = /(\d+)\s*(?:F[ÖO0]R|F)\s+(\d{1,5})[,.](\d{2})/i;
-const QTY_RE = /(\d+)\s*ST\s*[xX*]\s*(\d{1,5})[,.](\d{2})/i;
-const WEIGHT_RE = /(\d+[,.]\d{1,3})\s*KG\s*[xX*]\s*(\d{1,5})[,.](\d{2})/i;
-const MONEY_TOKEN_RE = /-?\s?\d{1,5}[,.]\d{2}/g;
+// OCR often reads FÖR as FOR/F0R, and sometimes inserts a space inside the
+// price ("29, 90") — all money patterns tolerate \s? around the separator.
+const OFFER_RE = /(\d+)\s*(?:F[ÖO0]R|F)\s+(\d{1,5})\s?[,.]\s?(\d{2})/i;
+const QTY_RE = /(\d+)\s*ST\s*[xX*]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
+const WEIGHT_RE = /(\d+[,.]\d{1,3})\s*KG\s*[xX*]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
+const MONEY_TOKEN_RE = /-?\s?\d{1,5}\s?[,.]\s?\d{2}(?!\d)/g;
 const DASHED_RE = /^[-—_=* ]{6,}$/;
 
 function tokenToOre(token: string): { ore: number; negative: boolean } {
   const negative = token.includes('-');
-  const m = token.match(/(\d{1,5})[,.](\d{2})/)!;
+  const m = token.match(/(\d{1,5})\s?[,.]\s?(\d{2})/)!;
   return { ore: Number(m[1]) * 100 + Number(m[2]), negative };
 }
 

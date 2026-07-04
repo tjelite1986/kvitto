@@ -120,6 +120,18 @@ describe('parseLocally — Willys style (multi-line items)', () => {
   });
 });
 
+describe('parseLocally — OCR quirks', () => {
+  it('handles a space inside the price ("29, 90" from tesseract 5.5)', () => {
+    const lines = WILLYS_LINES.map((l) =>
+      l === 'FALUKORV 800G 29,90' ? 'FALUKORV 800G 29, 90' : l
+    );
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(checksumOk).toBe(true);
+    const korv = parsed.items.find((i) => i.name.includes('FALUKORV'))!;
+    expect(korv.line_total_ore).toBe(2990);
+  });
+});
+
 describe('parseLocally — checksum failure', () => {
   it('fails the checksum when a line is garbled', () => {
     const broken = ICA_LINES.filter((l) => !l.includes('POLARBROD'));
