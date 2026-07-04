@@ -30,6 +30,7 @@ interface ReceiptDetail {
   status: string;
   storeName: string | null;
   purchaseDate: string | null;
+  purchaseTime: string | null;
   totalOre: number | null;
   imageWidth: number | null;
   imageHeight: number | null;
@@ -69,7 +70,10 @@ export default function ReceiptDetailPage() {
           <h1 className="text-xl font-bold mt-1">
             {receipt.storeName ?? 'Unknown store'}
           </h1>
-          <p className="text-sm text-gray-400">{receipt.purchaseDate}</p>
+          <p className="text-sm text-gray-400">
+            {receipt.purchaseDate}
+            {receipt.purchaseTime && ` kl ${receipt.purchaseTime}`}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {statusBadge(receipt.status)}
@@ -142,7 +146,6 @@ export default function ReceiptDetailPage() {
                     {item.unitPriceOre != null && ` × ${formatKr(item.unitPriceOre)}`}
                     {item.offerQty && item.offerTotalOre != null &&
                       ` · ${item.offerQty} for ${formatKr(item.offerTotalOre)}`}
-                    {item.discountOre > 0 && ` · discount -${formatKr(item.discountOre)}`}
                     {item.pantOre > 0 && ` · pant +${formatKr(item.pantOre)}`}
                     {item.productName && (
                       <Link
@@ -156,21 +159,53 @@ export default function ReceiptDetailPage() {
                   </p>
                 </div>
               </div>
-              <span className="text-sm font-medium shrink-0">
-                {formatKr(
-                  (item.offerQty && item.offerTotalOre != null
-                    ? item.offerTotalOre
-                    : item.lineTotalOre) -
+              <span className="text-right shrink-0">
+                <span className="text-sm font-medium block">
+                  {formatKr(
+                    (item.offerQty && item.offerTotalOre != null
+                      ? item.offerTotalOre
+                      : item.lineTotalOre) -
+                      (item.discountOre || 0) +
+                      (item.pantOre || 0)
+                  )}
+                </span>
+                {(() => {
+                  const saved =
                     (item.discountOre || 0) +
-                    (item.pantOre || 0)
-                )}
+                    (item.offerQty && item.offerTotalOre != null
+                      ? Math.max(0, item.lineTotalOre - item.offerTotalOre)
+                      : 0);
+                  return saved > 0 ? (
+                    <span className="text-[11px] text-green-600 block">
+                      saved {formatKr(saved)}
+                    </span>
+                  ) : null;
+                })()}
               </span>
             </div>
           ))}
           {receipt.totalOre != null && (
             <div className="px-4 py-3 flex items-center justify-between font-semibold">
               <span>Total</span>
-              <span>{formatKr(receipt.totalOre)}</span>
+              <span className="text-right">
+                {(() => {
+                  const saved = receipt.items.reduce(
+                    (sum, item) =>
+                      sum +
+                      (item.discountOre || 0) +
+                      (item.offerQty && item.offerTotalOre != null
+                        ? Math.max(0, item.lineTotalOre - item.offerTotalOre)
+                        : 0),
+                    0
+                  );
+                  return saved > 0 ? (
+                    <span className="block text-xs font-normal text-green-600">
+                      saved {formatKr(saved)}
+                    </span>
+                  ) : null;
+                })()}
+                {formatKr(receipt.totalOre)}
+              </span>
             </div>
           )}
         </div>

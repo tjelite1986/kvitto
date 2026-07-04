@@ -34,6 +34,7 @@ interface ReceiptDetail {
   storeId: number | null;
   storeName: string | null;
   purchaseDate: string | null;
+  purchaseTime: string | null;
   totalOre: number | null;
   errorMessage: string | null;
   imageWidth: number | null;
@@ -86,6 +87,7 @@ export default function ReviewPage() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [storeName, setStoreName] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
+  const [purchaseTime, setPurchaseTime] = useState('');
   const [totalKr, setTotalKr] = useState('');
   const [phase, setPhase] = useState<'loading' | 'parsing' | 'review' | 'saving' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -96,6 +98,7 @@ export default function ReviewPage() {
     setItems(data.items ?? []);
     setStoreName(data.storeName ?? '');
     setPurchaseDate(data.purchaseDate ?? '');
+    setPurchaseTime(data.purchaseTime ?? '');
     setTotalKr(oreToInput(data.totalOre));
   }, []);
 
@@ -208,6 +211,7 @@ export default function ReviewPage() {
       body: JSON.stringify({
         storeName: storeName.trim() || null,
         purchaseDate: purchaseDate || null,
+        purchaseTime: purchaseTime || null,
         totalOre: inputToOre(totalKr),
         items,
       }),
@@ -237,6 +241,15 @@ export default function ReviewPage() {
   }, 0);
   const enteredTotal = inputToOre(totalKr);
   const sumMatches = enteredTotal == null || Math.abs(computedSum - enteredTotal) <= 1;
+  const totalSaved = items.reduce(
+    (sum, item) =>
+      sum +
+      (item.discountOre || 0) +
+      (item.offerQty && item.offerTotalOre != null
+        ? Math.max(0, item.lineTotalOre - item.offerTotalOre)
+        : 0),
+    0
+  );
 
   const inputClass =
     'w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500';
@@ -300,8 +313,8 @@ export default function ReviewPage() {
             </div>
           ) : (
             <>
-              <div className="bg-white rounded-lg shadow p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
+              <div className="bg-white rounded-lg shadow p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="col-span-2 sm:col-span-1">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Store</label>
                   <input
                     value={storeName}
@@ -316,6 +329,15 @@ export default function ReviewPage() {
                     type="date"
                     value={purchaseDate}
                     onChange={(e) => setPurchaseDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Time</label>
+                  <input
+                    type="time"
+                    value={purchaseTime}
+                    onChange={(e) => setPurchaseTime(e.target.value)}
                     className={inputClass}
                   />
                 </div>
@@ -414,7 +436,7 @@ export default function ReviewPage() {
                         />
                       </div>
                     </div>
-                    <div className="pl-4">
+                    <div className="pl-4 flex items-center justify-between gap-2">
                       <ProductPicker
                         productId={item.productId}
                         productName={item.productName ?? null}
@@ -423,6 +445,18 @@ export default function ReviewPage() {
                           updateItem(index, { productId, productName })
                         }
                       />
+                      {(() => {
+                        const saved =
+                          (item.discountOre || 0) +
+                          (item.offerQty && item.offerTotalOre != null
+                            ? Math.max(0, item.lineTotalOre - item.offerTotalOre)
+                            : 0);
+                        return saved > 0 ? (
+                          <span className="text-xs font-medium text-green-600 shrink-0">
+                            Saved {formatKr(saved)}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                     <div className="grid grid-cols-4 gap-2 items-end" onClick={(e) => e.stopPropagation()}>
                       <div>
@@ -471,11 +505,18 @@ export default function ReviewPage() {
                   <button onClick={addItem} className="text-sm text-green-600 hover:underline">
                     + Add item
                   </button>
-                  <span
-                    className={`text-sm font-medium ${sumMatches ? 'text-green-600' : 'text-red-600'}`}
-                  >
-                    Sum: {formatKr(computedSum)}
-                    {!sumMatches && enteredTotal != null && ` (total says ${formatKr(enteredTotal)})`}
+                  <span className="text-right">
+                    {totalSaved > 0 && (
+                      <span className="block text-xs text-green-600">
+                        Total saved: {formatKr(totalSaved)}
+                      </span>
+                    )}
+                    <span
+                      className={`text-sm font-medium ${sumMatches ? 'text-green-600' : 'text-red-600'}`}
+                    >
+                      Sum: {formatKr(computedSum)}
+                      {!sumMatches && enteredTotal != null && ` (total says ${formatKr(enteredTotal)})`}
+                    </span>
                   </span>
                 </div>
               </div>

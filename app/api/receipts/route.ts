@@ -26,6 +26,7 @@ export async function GET() {
       storeId: receipts.storeId,
       storeName: stores.name,
       purchaseDate: receipts.purchaseDate,
+      purchaseTime: receipts.purchaseTime,
       totalOre: receipts.totalOre,
       status: receipts.status,
       createdAt: receipts.createdAt,

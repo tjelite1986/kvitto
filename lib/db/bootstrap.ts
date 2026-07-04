@@ -63,6 +63,7 @@ export function bootstrapSchema(sqlite: Database.Database): void {
     user_id INTEGER NOT NULL REFERENCES users(id),
     store_id INTEGER REFERENCES stores(id),
     purchase_date TEXT,
+    purchase_time TEXT,
     total_ore INTEGER,
     image_path TEXT NOT NULL,
     image_width INTEGER,
@@ -102,5 +103,11 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   const itemCols = sqlite.prepare(`PRAGMA table_info(receipt_items)`).all() as Array<{ name: string }>;
   if (!itemCols.some((c) => c.name === 'pant_ore')) {
     sqlite.exec(`ALTER TABLE receipt_items ADD COLUMN pant_ore INTEGER NOT NULL DEFAULT 0`);
+  }
+
+  // v3: purchase time of day
+  const receiptCols = sqlite.prepare(`PRAGMA table_info(receipts)`).all() as Array<{ name: string }>;
+  if (!receiptCols.some((c) => c.name === 'purchase_time')) {
+    sqlite.exec(`ALTER TABLE receipts ADD COLUMN purchase_time TEXT`);
   }
 }

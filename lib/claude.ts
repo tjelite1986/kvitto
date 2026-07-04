@@ -20,6 +20,7 @@ export interface ParsedItem {
 export interface ParsedReceipt {
   store_name: string | null;
   purchase_date: string | null;
+  purchase_time: string | null;
   total_ore: number | null;
   items: ParsedItem[];
 }
@@ -34,6 +35,10 @@ const RECEIPT_SCHEMA = {
     purchase_date: {
       type: ['string', 'null'],
       description: 'Purchase date in YYYY-MM-DD format, null if not found',
+    },
+    purchase_time: {
+      type: ['string', 'null'],
+      description: 'Purchase time of day in 24h HH:MM format (from the receipt datetime line), null if not found',
     },
     total_ore: {
       type: ['integer', 'null'],
@@ -85,7 +90,7 @@ const RECEIPT_SCHEMA = {
       },
     },
   },
-  required: ['store_name', 'purchase_date', 'total_ore', 'items'],
+  required: ['store_name', 'purchase_date', 'purchase_time', 'total_ore', 'items'],
   additionalProperties: false,
 } as const;
 
@@ -103,7 +108,7 @@ Swedish receipt conventions:
 - Sanity: sum over items of (offer_total_ore if set, else line_total_ore) - discount_ore + pant_ore should equal the receipt total.
 - The grand total is usually labelled "TOTALT", "ATT BETALA", "SUMMA" or "Total".
 - The OCR text may contain recognition errors; use the image to resolve them. In source_lines, quote the OCR lines VERBATIM as given (even if misrecognized) so they can be located later.
-- purchase_date: receipts print dates like "2026-07-01", "26-07-01" or "01.07.26"; output YYYY-MM-DD.`;
+- purchase_date: receipts print dates like "2026-07-01", "26-07-01" or "01.07.26"; output YYYY-MM-DD. The time usually follows the date ("2026-07-01 17:42"); output it as purchase_time in 24h HH:MM.`;
 
 export interface StoreContext {
   layoutHints: string;

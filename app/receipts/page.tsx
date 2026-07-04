@@ -9,6 +9,7 @@ interface ReceiptRow {
   id: number;
   storeName: string | null;
   purchaseDate: string | null;
+  purchaseTime: string | null;
   totalOre: number | null;
   status: string;
   createdAt: string;
@@ -65,6 +66,7 @@ export default function ReceiptsPage() {
                     <p className="text-sm font-medium truncate">{r.storeName ?? 'Unknown store'}</p>
                     <p className="text-xs text-gray-400">
                       {r.purchaseDate ?? r.createdAt.slice(0, 10)}
+                      {r.purchaseTime && ` kl ${r.purchaseTime}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">

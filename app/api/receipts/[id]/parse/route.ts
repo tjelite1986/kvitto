@@ -138,6 +138,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       .set({
         storeId: detection?.storeId ?? null,
         purchaseDate: parsed.purchase_date,
+        purchaseTime: parsed.purchase_time,
         totalOre: parsed.total_ore,
         claudeRaw: JSON.stringify({ parsed, totalMismatch, detection }),
         status: 'pending_review',
@@ -158,6 +159,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       storeId: detection?.storeId ?? null,
       storeConfidence: detection?.confidence ?? null,
       purchaseDate: parsed.purchase_date,
+      purchaseTime: parsed.purchase_time,
       totalOre: parsed.total_ore,
       totalMismatch,
       items,

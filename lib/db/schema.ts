@@ -45,6 +45,7 @@ export const receipts = sqliteTable('receipts', {
   userId: integer('user_id').notNull().references(() => users.id),
   storeId: integer('store_id').references(() => stores.id),
   purchaseDate: text('purchase_date'), // YYYY-MM-DD
+  purchaseTime: text('purchase_time'), // HH:MM
   totalOre: integer('total_ore'),
   imagePath: text('image_path').notNull(), // directory under data/receipts, relative to data dir
   imageWidth: integer('image_width'),
