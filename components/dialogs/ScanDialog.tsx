@@ -116,7 +116,7 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
                 onClick={() => fileInputRef.current?.click()}
                 className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 text-sm font-medium"
               >
-                Choose image
+                Choose image or PDF
               </button>
             </div>
             <input
@@ -130,7 +130,9 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+              // Some Android pickers match extensions rather than MIME types,
+              // so list both — otherwise PDFs are greyed out in the picker.
+              accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
               onChange={handleInputChange}
               className="hidden"
             />
