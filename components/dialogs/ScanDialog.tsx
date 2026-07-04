@@ -14,17 +14,28 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPdf, setIsPdf] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
 
   if (!open) return null;
 
-  function selectFile(f: File) {
+  async function selectFile(f: File) {
     setError('');
     setFile(f);
+    setPreviewFailed(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(f));
+    // Sniff the content — Android pickers often deliver PDFs with a generic
+    // MIME type and no file extension.
+    try {
+      const head = await f.slice(0, 5).text();
+      setIsPdf(head === '%PDF-');
+    } catch {
+      setIsPdf(false);
+    }
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -44,6 +55,8 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(null);
     setPreviewUrl(null);
+    setIsPdf(false);
+    setPreviewFailed(false);
     setError('');
     setUploading(false);
   }
@@ -130,28 +143,33 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
             <input
               ref={fileInputRef}
               type="file"
-              // Some Android pickers match extensions rather than MIME types,
-              // so list both — otherwise PDFs are greyed out in the picker.
-              accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
+              // Permissive on purpose: Android pickers are unreliable about
+              // MIME types/extensions — the server sniffs the actual content.
+              accept="image/*,application/pdf,.pdf"
               onChange={handleInputChange}
               className="hidden"
             />
           </div>
         ) : (
           <div>
-            {file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? (
+            {isPdf || previewFailed ? (
               <div className="h-40 flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 gap-2">
                 <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm text-gray-500">{file.name}</p>
-                <p className="text-xs text-gray-400">The first page will be used as the receipt image</p>
+                <p className="text-sm text-gray-500">{file.name || 'Selected file'}</p>
+                <p className="text-xs text-gray-400">
+                  {isPdf
+                    ? 'PDF — the first page will be used as the receipt image'
+                    : 'No preview available'}
+                </p>
               </div>
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={previewUrl!}
                 alt="Receipt preview"
+                onError={() => setPreviewFailed(true)}
                 className="max-h-96 mx-auto rounded-lg border border-gray-200 object-contain"
               />
             )}

@@ -15,7 +15,6 @@ const execFileAsync = promisify(execFile);
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const MAX_SIZE = 15 * 1024 * 1024;
 
 /**
@@ -76,24 +75,37 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No image provided' }, { status: 400 });
   }
-  if (file.name?.toLowerCase().endsWith('.heic') || file.type === 'image/heic' || file.type === 'image/heif') {
-    return NextResponse.json(
-      { error: 'HEIC is not supported. Set your camera to JPEG, or upload a JPEG/PNG/WebP image.' },
-      { status: 400 }
-    );
-  }
-  const isPdf = file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
-  if (!isPdf && !ALLOWED_MIME.includes(file.type)) {
-    return NextResponse.json(
-      { error: 'Unsupported file type. Use JPEG, PNG, WebP or PDF.' },
-      { status: 400 }
-    );
-  }
   if (file.size > MAX_SIZE) {
     return NextResponse.json({ error: 'File is too large (max 15 MB).' }, { status: 400 });
   }
 
   let buffer: Buffer = Buffer.from(await file.arrayBuffer());
+
+  // Detect the actual content instead of trusting MIME type or filename —
+  // Android pickers often deliver files with a generic type and no extension.
+  const isPdf = buffer.subarray(0, 5).toString('latin1') === '%PDF-';
+  if (!isPdf) {
+    try {
+      const meta = await sharp(buffer).metadata();
+      if (meta.format === 'heif') {
+        return NextResponse.json(
+          { error: 'HEIC is not supported. Set your camera to JPEG, or upload a JPEG/PNG/WebP image.' },
+          { status: 400 }
+        );
+      }
+      if (!['jpeg', 'png', 'webp', 'gif', 'tiff', 'avif'].includes(meta.format ?? '')) {
+        return NextResponse.json(
+          { error: 'Unsupported file type. Use JPEG, PNG, WebP or PDF.' },
+          { status: 400 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: 'Could not read the file as an image or PDF.' },
+        { status: 400 }
+      );
+    }
+  }
 
   const receipt = db
     .insert(receipts)
