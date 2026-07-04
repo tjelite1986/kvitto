@@ -23,9 +23,10 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # OCR: tesseract with Swedish + English language data.
+# poppler-utils provides pdftoppm for PDF receipt uploads.
 # (If these apk packages ever disappear, fall back to node:20-bookworm-slim
-# with: apt-get install -y tesseract-ocr tesseract-ocr-swe tesseract-ocr-eng)
-RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-swe tesseract-ocr-data-eng
+# with: apt-get install -y tesseract-ocr tesseract-ocr-swe tesseract-ocr-eng poppler-utils)
+RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-swe tesseract-ocr-data-eng poppler-utils
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

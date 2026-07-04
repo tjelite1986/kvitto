@@ -103,7 +103,7 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
             }`}
           >
             <p className="text-sm text-gray-500 mb-4">
-              Photograph the receipt or choose an image
+              Photograph the receipt, or choose an image or PDF
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
@@ -130,19 +130,29 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
               onChange={handleInputChange}
               className="hidden"
             />
           </div>
         ) : (
           <div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl!}
-              alt="Receipt preview"
-              className="max-h-96 mx-auto rounded-lg border border-gray-200 object-contain"
-            />
+            {file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? (
+              <div className="h-40 flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 gap-2">
+                <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm text-gray-500">{file.name}</p>
+                <p className="text-xs text-gray-400">The first page will be used as the receipt image</p>
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewUrl!}
+                alt="Receipt preview"
+                className="max-h-96 mx-auto rounded-lg border border-gray-200 object-contain"
+              />
+            )}
             <div className="flex gap-3 mt-4">
               <button
                 onClick={reset}

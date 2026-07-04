@@ -4,13 +4,39 @@ import { authOptions, sessionUserId } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { receipts, stores } from '@/lib/db/schema';
 import { desc, eq } from 'drizzle-orm';
-import { ensureReceiptDir, originalImagePath, displayImagePath, deleteReceiptDir } from '@/lib/storage';
+import { ensureReceiptDir, originalImagePath, displayImagePath, deleteReceiptDir, receiptDir } from '@/lib/storage';
 import sharp from 'sharp';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import fs from 'fs';
+
+const execFileAsync = promisify(execFile);
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const MAX_SIZE = 15 * 1024 * 1024;
+
+/**
+ * Rasterize the first page of a PDF receipt (e.g. a Kivra e-receipt) to a
+ * JPEG buffer via poppler's pdftoppm. The original PDF is kept in the
+ * receipt directory for reference.
+ */
+async function pdfToImageBuffer(pdfBuffer: Buffer, dir: string): Promise<Buffer> {
+  const pdfPath = path.join(dir, 'original.pdf');
+  fs.writeFileSync(pdfPath, pdfBuffer);
+  const outPrefix = path.join(dir, 'pdf-page');
+  await execFileAsync(
+    'pdftoppm',
+    ['-jpeg', '-r', '200', '-f', '1', '-l', '1', '-singlefile', pdfPath, outPrefix],
+    { timeout: 30_000 }
+  );
+  const jpegPath = `${outPrefix}.jpg`;
+  const buffer = fs.readFileSync(jpegPath);
+  fs.unlinkSync(jpegPath);
+  return buffer;
+}
 // Claude vision works best at <= 1568 px on the long edge; this derivative is
 // also the canonical coordinate space for OCR words and item bounding boxes.
 const DISPLAY_LONG_EDGE = 1568;
@@ -56,14 +82,18 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!ALLOWED_MIME.includes(file.type)) {
-    return NextResponse.json({ error: 'Unsupported image type. Use JPEG, PNG or WebP.' }, { status: 400 });
+  const isPdf = file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
+  if (!isPdf && !ALLOWED_MIME.includes(file.type)) {
+    return NextResponse.json(
+      { error: 'Unsupported file type. Use JPEG, PNG, WebP or PDF.' },
+      { status: 400 }
+    );
   }
   if (file.size > MAX_SIZE) {
-    return NextResponse.json({ error: 'Image is too large (max 15 MB).' }, { status: 400 });
+    return NextResponse.json({ error: 'File is too large (max 15 MB).' }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  let buffer: Buffer = Buffer.from(await file.arrayBuffer());
 
   const receipt = db
     .insert(receipts)
@@ -73,6 +103,10 @@ export async function POST(req: NextRequest) {
 
   try {
     ensureReceiptDir(receipt.id);
+
+    if (isPdf) {
+      buffer = await pdfToImageBuffer(buffer, receiptDir(receipt.id));
+    }
 
     // .rotate() applies EXIF orientation so stored pixels match what the user saw.
     const original = sharp(buffer).rotate();
