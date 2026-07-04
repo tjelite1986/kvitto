@@ -19,9 +19,10 @@ const PANT_RE = /\bPANT\b/i;
 const DISCOUNT_RE = /\b(RABATT|PRISNEDSATT|PRISNEDS|S[ÄA]NKT|EXTRAPRIS|KAMPANJ)\b/i;
 // OCR often reads FÖR as FOR/F0R, and sometimes inserts a space inside the
 // price ("29, 90") — all money patterns tolerate \s? around the separator.
+// x/* between qty and price is sometimes OCR'd as +
 const OFFER_RE = /(\d+)\s*(?:F[ÖO0]R|F)\s+(\d{1,5})\s?[,.]\s?(\d{2})/i;
-const QTY_RE = /(\d+)\s*ST\s*[xX*]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
-const WEIGHT_RE = /(\d+[,.]\d{1,3})\s*KG\s*[xX*]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
+const QTY_RE = /(\d+)\s*ST\s*[xX*+]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
+const WEIGHT_RE = /(\d+\s?[,.]\s?\d{1,3})\s*KG\s*[xX*+]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
 const MONEY_TOKEN_RE = /-?\s?\d{1,5}\s?[,.]\s?\d{2}(?!\d)/g;
 const DASHED_RE = /^[-—_=* ]{6,}$/;
 
@@ -45,6 +46,7 @@ function stripMoneyAndNoise(text: string): string {
     .replace(QTY_RE, ' ')
     .replace(WEIGHT_RE, ' ')
     .replace(/\s+/g, ' ')
+    .replace(/^[*+\-\s]+/, '') // bonus/pant markers like "* " or "+"
     .trim();
 }
 
@@ -131,14 +133,24 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
       continue;
     }
 
-    // "N st x PRICE [TOTAL]" — quantity line for a pending name or new values
+    // "N st x PRICE [TOTAL]" — either its own line under a name-only line
+    // (Willys) or inline with the name (Hemköp: "ENERGY DRINK 2st*9,41 18,82")
     const qty = text.match(QTY_RE);
     if (qty) {
       const unitPrice = Number(qty[2]) * 100 + Number(qty[3]);
       const count = Number(qty[1]);
-      const item = pendingName ? newItem(pendingName.name, pendingName.line) : prev();
+      const inlineName = stripMoneyAndNoise(text.slice(0, qty.index ?? 0));
+      let item: ParsedItem | null;
+      if (hasLetters(inlineName)) {
+        item = newItem(inlineName, text);
+        items.push(item);
+      } else if (pendingName) {
+        item = newItem(pendingName.name, pendingName.line);
+        items.push(item);
+      } else {
+        item = prev();
+      }
       if (item) {
-        if (pendingName) items.push(item);
         item.qty = count;
         item.unit_price_ore = unitPrice;
         item.line_total_ore = money && !money.negative ? money.ore : unitPrice * count;
@@ -148,14 +160,23 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
       continue;
     }
 
-    // "0,812 kg x 14,90 kr/kg TOTAL" — weight line
+    // "0,812 kg x 14,90 kr/kg TOTAL" — weight line, own or inline
     const weight = text.match(WEIGHT_RE);
     if (weight) {
-      const kg = Number(weight[1].replace(',', '.'));
+      const kg = Number(weight[1].replace(/\s/g, '').replace(',', '.'));
       const perKg = Number(weight[2]) * 100 + Number(weight[3]);
-      const item = pendingName ? newItem(pendingName.name, pendingName.line) : prev();
+      const inlineName = stripMoneyAndNoise(text.slice(0, weight.index ?? 0));
+      let item: ParsedItem | null;
+      if (hasLetters(inlineName)) {
+        item = newItem(inlineName, text);
+        items.push(item);
+      } else if (pendingName) {
+        item = newItem(pendingName.name, pendingName.line);
+        items.push(item);
+      } else {
+        item = prev();
+      }
       if (item) {
-        if (pendingName) items.push(item);
         item.qty = kg;
         item.unit = 'kg';
         item.unit_price_ore = perKg;
