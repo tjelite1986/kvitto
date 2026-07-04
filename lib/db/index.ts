@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
+import { bootstrapSchema } from './bootstrap';
 import path from 'path';
 import fs from 'fs';
 
@@ -13,5 +14,8 @@ const dbPath = path.join(dbDir, 'kvitto.db');
 export const sqlite = new Database(dbPath);
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
+
+// Idempotent — makes a fresh container/volume work without a migrate step.
+bootstrapSchema(sqlite);
 
 export const db = drizzle(sqlite, { schema });
