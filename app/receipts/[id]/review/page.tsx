@@ -24,7 +24,7 @@ interface ItemRow {
   offerQty: number | null;
   offerTotalOre: number | null;
   discountOre: number;
-  isPant: boolean;
+  pantOre: number;
   bbox: string | null;
 }
 
@@ -152,6 +152,7 @@ export default function ReviewPage() {
         rawText: `${above.rawText} ${current.rawText}`.trim(),
         lineTotalOre: above.lineTotalOre + current.lineTotalOre,
         discountOre: (above.discountOre || 0) + (current.discountOre || 0),
+        pantOre: (above.pantOre || 0) + (current.pantOre || 0),
         bbox: JSON.stringify(
           mergeBbox(parseBbox(above.bbox), parseBbox(current.bbox) ?? { x: 0, y: 0, w: 0, h: 0 })
         ),
@@ -192,7 +193,7 @@ export default function ReviewPage() {
         offerQty: null,
         offerTotalOre: null,
         discountOre: 0,
-        isPant: false,
+        pantOre: 0,
         bbox: null,
       },
     ]);
@@ -232,7 +233,7 @@ export default function ReviewPage() {
   const computedSum = items.reduce((sum, item) => {
     const effective =
       item.offerQty && item.offerTotalOre != null ? item.offerTotalOre : item.lineTotalOre;
-    return sum + effective - (item.discountOre || 0);
+    return sum + effective - (item.discountOre || 0) + (item.pantOre || 0);
   }, 0);
   const enteredTotal = inputToOre(totalKr);
   const sumMatches = enteredTotal == null || Math.abs(computedSum - enteredTotal) <= 1;
@@ -453,15 +454,15 @@ export default function ReviewPage() {
                           className={inputClass}
                         />
                       </div>
-                      <label className="flex items-center gap-1.5 text-xs text-gray-600 pb-1.5">
+                      <div>
+                        <label className="block text-[10px] text-gray-400">Pant</label>
                         <input
-                          type="checkbox"
-                          checked={item.isPant}
-                          onChange={(e) => updateItem(index, { isPant: e.target.checked })}
-                          className="rounded"
+                          value={oreToInput(item.pantOre)}
+                          onChange={(e) => updateItem(index, { pantOre: inputToOre(e.target.value) ?? 0 })}
+                          inputMode="decimal"
+                          className={inputClass}
                         />
-                        Pant
-                      </label>
+                      </div>
                     </div>
                   </div>
                 ))}

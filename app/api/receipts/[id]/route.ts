@@ -28,7 +28,7 @@ interface ConfirmItem {
   offerQty?: number | null;
   offerTotalOre?: number | null;
   discountOre?: number;
-  isPant?: boolean;
+  pantOre?: number;
   bbox?: string | null;
 }
 
@@ -89,7 +89,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           offerQty: item.offerQty ?? null,
           offerTotalOre: item.offerTotalOre ?? null,
           discountOre: item.discountOre ?? 0,
-          isPant: item.isPant ?? false,
+          pantOre: item.pantOre ?? 0,
           bbox: item.bbox ?? null,
         })
         .run();
@@ -153,7 +153,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             offerQty: item.offerQty ?? null,
             offerTotalOre: item.offerTotalOre ?? null,
             discountOre: item.discountOre ?? 0,
-            isPant: item.isPant ?? false,
+            pantOre: item.pantOre ?? 0,
           }))
         );
       } catch (e) {
@@ -206,6 +206,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       offerQty: receiptItems.offerQty,
       offerTotalOre: receiptItems.offerTotalOre,
       discountOre: receiptItems.discountOre,
+      pantOre: receiptItems.pantOre,
       isPant: receiptItems.isPant,
       bbox: receiptItems.bbox,
     })

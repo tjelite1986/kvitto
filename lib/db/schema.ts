@@ -77,7 +77,10 @@ export const receiptItems = sqliteTable('receipt_items', {
   offerQty: integer('offer_qty'),
   offerTotalOre: integer('offer_total_ore'),
   discountOre: integer('discount_ore').notNull().default(0), // positive amount subtracted
-  isPant: integer('is_pant', { mode: 'boolean' }).notNull().default(false),
+  // Deposit surcharge for the whole line (e.g. 4 cans x 100 öre = 400).
+  // Pant is an extra per-item charge, never an item of its own.
+  pantOre: integer('pant_ore').notNull().default(0),
+  isPant: integer('is_pant', { mode: 'boolean' }).notNull().default(false), // legacy rows only
   bbox: text('bbox'), // JSON { x, y, w, h } in display-image pixel space
 }, (t) => [
   index('receipt_items_receipt_idx').on(t.receiptId),

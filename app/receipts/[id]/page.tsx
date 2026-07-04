@@ -20,7 +20,8 @@ interface ItemRow {
   offerQty: number | null;
   offerTotalOre: number | null;
   discountOre: number;
-  isPant: boolean;
+  pantOre: number;
+  isPant: boolean; // legacy rows from before pant became a per-line surcharge
   bbox: string | null;
 }
 
@@ -142,6 +143,7 @@ export default function ReceiptDetailPage() {
                     {item.offerQty && item.offerTotalOre != null &&
                       ` · ${item.offerQty} for ${formatKr(item.offerTotalOre)}`}
                     {item.discountOre > 0 && ` · discount -${formatKr(item.discountOre)}`}
+                    {item.pantOre > 0 && ` · pant +${formatKr(item.pantOre)}`}
                     {item.productName && (
                       <Link
                         href={`/products/${item.productId}`}
@@ -154,7 +156,15 @@ export default function ReceiptDetailPage() {
                   </p>
                 </div>
               </div>
-              <span className="text-sm font-medium shrink-0">{formatKr(item.lineTotalOre)}</span>
+              <span className="text-sm font-medium shrink-0">
+                {formatKr(
+                  (item.offerQty && item.offerTotalOre != null
+                    ? item.offerTotalOre
+                    : item.lineTotalOre) -
+                    (item.discountOre || 0) +
+                    (item.pantOre || 0)
+                )}
+              </span>
             </div>
           ))}
           {receipt.totalOre != null && (

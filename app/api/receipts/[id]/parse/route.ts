@@ -68,7 +68,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         item.offer_qty && item.offer_total_ore != null
           ? item.offer_total_ore
           : item.line_total_ore;
-      return sum + effective - item.discount_ore;
+      return sum + effective - item.discount_ore + (item.pant_ore || 0);
     }, 0);
     const totalMismatch =
       parsed.total_ore != null && Math.abs(computedSum - parsed.total_ore) > 1;
@@ -124,7 +124,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         offerQty: item.offer_qty,
         offerTotalOre: item.offer_total_ore,
         discountOre: item.discount_ore,
-        isPant: item.is_pant,
+        pantOre: item.pant_ore || 0,
         bbox,
       };
     });

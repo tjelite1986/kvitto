@@ -54,7 +54,7 @@ export interface ConfirmedItemForLearning {
   offerQty: number | null;
   offerTotalOre: number | null;
   discountOre: number;
-  isPant: boolean;
+  pantOre: number;
 }
 
 interface CorrectionExample {
@@ -73,7 +73,7 @@ function itemSnapshot(item: ConfirmedItemForLearning) {
     offer_qty: item.offerQty,
     offer_total_ore: item.offerTotalOre,
     discount_ore: item.discountOre,
-    is_pant: item.isPant,
+    pant_ore: item.pantOre,
   };
 }
 
@@ -87,7 +87,7 @@ function parsedSnapshot(item: ParsedItem) {
     offer_qty: item.offer_qty,
     offer_total_ore: item.offer_total_ore,
     discount_ore: item.discount_ore,
-    is_pant: item.is_pant,
+    pant_ore: item.pant_ore,
   };
 }
 
@@ -101,7 +101,7 @@ function materiallyDifferent(parsed: ParsedItem, confirmed: ConfirmedItemForLear
     (parsed.offer_qty ?? null) !== (confirmed.offerQty ?? null) ||
     (parsed.offer_total_ore ?? null) !== (confirmed.offerTotalOre ?? null) ||
     parsed.discount_ore !== (confirmed.discountOre ?? 0) ||
-    parsed.is_pant !== confirmed.isPant
+    (parsed.pant_ore || 0) !== (confirmed.pantOre ?? 0)
   );
 }
 

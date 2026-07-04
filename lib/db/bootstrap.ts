@@ -90,10 +90,17 @@ export function bootstrapSchema(sqlite: Database.Database): void {
     offer_qty INTEGER,
     offer_total_ore INTEGER,
     discount_ore INTEGER NOT NULL DEFAULT 0,
+    pant_ore INTEGER NOT NULL DEFAULT 0,
     is_pant INTEGER NOT NULL DEFAULT 0,
     bbox TEXT
   );
   CREATE INDEX IF NOT EXISTS receipt_items_receipt_idx ON receipt_items(receipt_id);
   CREATE INDEX IF NOT EXISTS receipt_items_product_idx ON receipt_items(product_id);
   `);
+
+  // v2: pant became a per-line surcharge (pant_ore) instead of separate rows
+  const itemCols = sqlite.prepare(`PRAGMA table_info(receipt_items)`).all() as Array<{ name: string }>;
+  if (!itemCols.some((c) => c.name === 'pant_ore')) {
+    sqlite.exec(`ALTER TABLE receipt_items ADD COLUMN pant_ore INTEGER NOT NULL DEFAULT 0`);
+  }
 }
