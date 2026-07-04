@@ -35,7 +35,10 @@ npm run db:migrate         # creates data/kvitto.db
 npm run dev
 ```
 
-`.env.local` needs `NEXTAUTH_SECRET` and `ANTHROPIC_API_KEY`.
+`.env.local` needs `NEXTAUTH_SECRET` and one parser key: `OPENROUTER_API_KEY`
+(preferred; model via `OPENROUTER_MODEL`, default `anthropic/claude-haiku-4.5`)
+or `ANTHROPIC_API_KEY` (direct API; model via `CLAUDE_MODEL`). When both are
+set OpenRouter wins unless `PARSER_PROVIDER=anthropic`.
 The first registered account becomes admin; registration closes after that
 (admins create further accounts under /admin).
 

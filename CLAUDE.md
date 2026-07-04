@@ -20,6 +20,14 @@ DB: `data/kvitto.db` | Container DB: `/app/data/kvitto.db`
 - Schema changes: update `lib/db/schema.ts` AND the bootstrap in
   `lib/db/migrate.ts` (CREATE TABLE IF NOT EXISTS + guarded ALTERs).
 
+## Parser providers (lib/claude.ts)
+- OPENROUTER_API_KEY set → OpenRouter chat/completions (OpenAI format,
+  `response_format: json_schema strict`), model `OPENROUTER_MODEL`
+  (default `anthropic/claude-haiku-4.5`). This is what production uses —
+  the direct Anthropic key has no credits.
+- Else ANTHROPIC_API_KEY → Anthropic SDK with `output_config.format`.
+- `PARSER_PROVIDER=anthropic` forces the direct API when both keys exist.
+
 ## Parse pipeline (app/api/receipts/[id]/parse/route.ts)
 upload → sharp (EXIF rotate, display ≤1568px) → tesseract TSV (swe+eng, psm 4)
 → store fingerprint detection → Claude (image + OCR text + store profile,

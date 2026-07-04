@@ -124,15 +124,73 @@ function buildUserText(ocrText: string, storeContext: StoreContext | null): stri
   return text;
 }
 
-export async function parseReceiptWithClaude(
+/**
+ * Parse via OpenRouter's OpenAI-compatible API. Same prompt and schema; the
+ * model (default: Claude Haiku via OpenRouter) is billed from OpenRouter
+ * credits instead of an Anthropic account.
+ */
+async function parseViaOpenRouter(
+  apiKey: string,
   imageBase64: string,
   ocrText: string,
   storeContext: StoreContext | null
 ): Promise<{ parsed: ParsedReceipt; raw: string }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not configured');
+  const body = {
+    model: process.env.OPENROUTER_MODEL ?? 'anthropic/claude-haiku-4.5',
+    max_tokens: 8000,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
+          },
+          { type: 'text', text: buildUserText(ocrText, storeContext) },
+        ],
+      },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'receipt', strict: true, schema: RECEIPT_SCHEMA },
+    },
+  };
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://kvitto.mecloud.win',
+      'X-Title': 'Kvitto',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenRouter error ${res.status}: ${errText.slice(0, 300)}`);
   }
+
+  const data = await res.json();
+  let content: string = data.choices?.[0]?.message?.content ?? '';
+  if (!content) {
+    throw new Error(`OpenRouter returned no content: ${JSON.stringify(data).slice(0, 300)}`);
+  }
+  // Some providers wrap JSON in markdown fences despite response_format
+  content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+
+  const parsed = JSON.parse(content) as ParsedReceipt;
+  return { parsed, raw: content };
+}
+
+async function parseViaAnthropic(
+  apiKey: string,
+  imageBase64: string,
+  ocrText: string,
+  storeContext: StoreContext | null
+): Promise<{ parsed: ParsedReceipt; raw: string }> {
   const client = new Anthropic({ apiKey });
 
   const response = await client.messages.create({
@@ -170,4 +228,26 @@ export async function parseReceiptWithClaude(
 
   const parsed = JSON.parse(textBlock.text) as ParsedReceipt;
   return { parsed, raw: textBlock.text };
+}
+
+/**
+ * Provider dispatch: OpenRouter when OPENROUTER_API_KEY is set (unless
+ * PARSER_PROVIDER=anthropic forces the direct API), else the Anthropic API.
+ */
+export async function parseReceiptWithClaude(
+  imageBase64: string,
+  ocrText: string,
+  storeContext: StoreContext | null
+): Promise<{ parsed: ParsedReceipt; raw: string }> {
+  const provider = process.env.PARSER_PROVIDER;
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+
+  if (openrouterKey && provider !== 'anthropic') {
+    return parseViaOpenRouter(openrouterKey, imageBase64, ocrText, storeContext);
+  }
+  if (anthropicKey) {
+    return parseViaAnthropic(anthropicKey, imageBase64, ocrText, storeContext);
+  }
+  throw new Error('No parser API key configured (OPENROUTER_API_KEY or ANTHROPIC_API_KEY)');
 }
