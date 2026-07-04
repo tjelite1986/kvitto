@@ -12,6 +12,16 @@ image, and track how prices develop per product and store over time.
 - NextAuth (credentials, JWT) — receipts are per-user, the price database is shared
 - Tesseract (swe+eng, TSV word boxes) + Claude vision (`claude-haiku-4-5`, structured outputs)
 
+## Parse modes
+
+- **Auto** (default): a free rule-based parser runs locally first; the result
+  is only accepted when the items sum öre-exact to the receipt's printed
+  total. Only receipts that fail this checksum are sent to the AI — so
+  well-behaved store layouts (Hemköp, Willys, ...) cost nothing per receipt.
+- **Manual**: no parsing at all — local OCR provides word boxes and you build
+  each item by tapping words on the image.
+- A badge in review shows which parser was used, with one-click AI re-read.
+
 ## How parsing works
 
 1. Upload stores `original.jpg` and a `display.jpg` (≤1568 px long edge) —

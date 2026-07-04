@@ -7,7 +7,8 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { getOwnedReceipt } from '@/lib/receipts';
 import { displayImagePath } from '@/lib/storage';
 import { runOcr, type OcrResult } from '@/lib/ocr';
-import { parseReceiptWithClaude } from '@/lib/claude';
+import { parseReceiptWithClaude, type ParsedReceipt } from '@/lib/claude';
+import { parseLocally } from '@/lib/local-parser';
 import { computeHeader, detectStore, loadStoreContext } from '@/lib/store-detection';
 import { bestMatch, normalizeAlias } from '@/lib/matching';
 import fs from 'fs';
@@ -21,10 +22,21 @@ export const maxDuration = 120;
 const BBOX_MATCH_THRESHOLD = 0.6;
 const ALIAS_MIN_CONFIDENCE = 0.9;
 
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+// mode: 'auto'   — local parser first when the store is known; AI as fallback
+//       'local'  — local parser only, never calls the API
+//       'ai'     — force the AI parser
+//       'manual' — OCR only (for word-tap entry), no items
+type ParseMode = 'auto' | 'local' | 'ai' | 'manual';
+
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   const userId = sessionUserId(session);
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const mode: ParseMode = ['auto', 'local', 'ai', 'manual'].includes(body?.mode)
+    ? body.mode
+    : 'auto';
 
   const receipt = getOwnedReceipt(Number(params.id), userId);
   if (!receipt) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -58,9 +70,47 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     const detection = detectStore(header);
     const storeContext = detection ? loadStoreContext(detection.storeId) : null;
 
-    // Step 3: Claude vision + OCR text -> structured receipt
-    const imageBase64 = fs.readFileSync(displayImagePath(receipt.id)).toString('base64');
-    const { parsed } = await parseReceiptWithClaude(imageBase64, ocr.text, storeContext);
+    // Manual mode: OCR only — the user builds the items via word taps
+    if (mode === 'manual') {
+      db.delete(receiptItems).where(eq(receiptItems.receiptId, receipt.id)).run();
+      db.update(receipts)
+        .set({
+          storeId: detection?.storeId ?? null,
+          claudeRaw: JSON.stringify({ parser: 'manual', detection }),
+          status: 'pending_review',
+        })
+        .where(eq(receipts.id, receipt.id))
+        .run();
+      return NextResponse.json({
+        status: 'pending_review',
+        parser: 'manual',
+        storeName: detection?.storeName ?? null,
+        storeId: detection?.storeId ?? null,
+        items: [],
+      });
+    }
+
+    // Step 3: parse — local rule parser first (free, on-device) when the store
+    // is already known; the receipt's printed total works as the checksum.
+    // Falls back to the AI parser when the local result doesn't add up.
+    let parsed: ParsedReceipt | null = null;
+    let parser: 'local' | 'ai' = 'local';
+
+    if (mode === 'local' || mode === 'auto') {
+      const local = parseLocally(ocr);
+      if (local.checksumOk || mode === 'local') {
+        parsed = local.parsed;
+      }
+    }
+    if (!parsed && mode !== 'local') {
+      const imageBase64 = fs.readFileSync(displayImagePath(receipt.id)).toString('base64');
+      const result = await parseReceiptWithClaude(imageBase64, ocr.text, storeContext);
+      parsed = result.parsed;
+      parser = 'ai';
+    }
+    if (!parsed) {
+      throw new Error('Local parse failed the total checksum');
+    }
 
     // Step 4: sanity check items vs total
     const computedSum = parsed.items.reduce((sum, item) => {
@@ -140,7 +190,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         purchaseDate: parsed.purchase_date,
         purchaseTime: parsed.purchase_time,
         totalOre: parsed.total_ore,
-        claudeRaw: JSON.stringify({ parsed, totalMismatch, detection }),
+        claudeRaw: JSON.stringify({ parsed, totalMismatch, detection, parser }),
         status: 'pending_review',
       })
       .where(eq(receipts.id, receipt.id))
@@ -155,6 +205,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
     return NextResponse.json({
       status: 'pending_review',
+      parser,
       storeName: detection?.storeName ?? parsed.store_name,
       storeId: detection?.storeId ?? null,
       storeConfidence: detection?.confidence ?? null,

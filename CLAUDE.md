@@ -20,6 +20,15 @@ DB: `data/kvitto.db` | Container DB: `/app/data/kvitto.db`
 - Schema changes: update `lib/db/schema.ts` AND the bootstrap in
   `lib/db/migrate.ts` (CREATE TABLE IF NOT EXISTS + guarded ALTERs).
 
+## Parse modes (parse route body {mode})
+- `auto` (default): lib/local-parser.ts first — rule-based, free, on-device;
+  accepted only when items sum öre-exact to the receipt's printed total
+  (the checksum). Falls back to AI otherwise.
+- `local`: local only, never calls an API (result kept even on mismatch).
+- `ai`: force the AI parser. `manual`: OCR only, zero items (word-tap entry).
+- Parser used is stored in claude_raw JSON (`parser`) and shown as a badge
+  in review, with a "Re-read with AI" button for local/manual results.
+
 ## Parser providers (lib/claude.ts)
 - OPENROUTER_API_KEY set → OpenRouter chat/completions (OpenAI format,
   `response_format: json_schema strict`), model `OPENROUTER_MODEL`

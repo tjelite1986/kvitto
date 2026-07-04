@@ -40,7 +40,19 @@ interface ReceiptDetail {
   imageWidth: number | null;
   imageHeight: number | null;
   ocrData: string | null;
+  claudeRaw: string | null;
   items: ItemRow[];
+}
+
+type ParseMode = 'auto' | 'local' | 'ai' | 'manual';
+
+function parserUsed(claudeRaw: string | null): string | null {
+  if (!claudeRaw) return null;
+  try {
+    return JSON.parse(claudeRaw).parser ?? 'ai';
+  } catch {
+    return null;
+  }
 }
 
 interface Bbox {
@@ -89,7 +101,7 @@ export default function ReviewPage() {
   const [purchaseDate, setPurchaseDate] = useState('');
   const [purchaseTime, setPurchaseTime] = useState('');
   const [totalKr, setTotalKr] = useState('');
-  const [phase, setPhase] = useState<'loading' | 'parsing' | 'review' | 'saving' | 'error'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'choice' | 'parsing' | 'review' | 'saving' | 'error'>('loading');
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -102,20 +114,27 @@ export default function ReviewPage() {
     setTotalKr(oreToInput(data.totalOre));
   }, []);
 
-  const triggerParse = useCallback(async () => {
-    setPhase('parsing');
-    setError('');
-    const res = await fetch(`/api/receipts/${params.id}/parse`, { method: 'POST' });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || 'Parsing failed.');
-      setPhase('error');
-      return;
-    }
-    const detail = await fetch(`/api/receipts/${params.id}`).then((r) => r.json());
-    applyReceipt(detail);
-    setPhase('review');
-  }, [params.id, applyReceipt]);
+  const triggerParse = useCallback(
+    async (mode: ParseMode) => {
+      setPhase('parsing');
+      setError('');
+      const res = await fetch(`/api/receipts/${params.id}/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Parsing failed.');
+        setPhase('choice');
+        return;
+      }
+      const detail = await fetch(`/api/receipts/${params.id}`).then((r) => r.json());
+      applyReceipt(detail);
+      setPhase('review');
+    },
+    [params.id, applyReceipt]
+  );
 
   useEffect(() => {
     fetch(`/api/receipts/${params.id}`)
@@ -123,7 +142,7 @@ export default function ReviewPage() {
       .then((data: ReceiptDetail) => {
         applyReceipt(data);
         if (data.status === 'uploaded' || data.status === 'failed') {
-          triggerParse();
+          setPhase('choice');
         } else if (data.status === 'processing') {
           setPhase('parsing');
         } else {
@@ -134,7 +153,7 @@ export default function ReviewPage() {
         setError('Could not load the receipt.');
         setPhase('error');
       });
-  }, [params.id, applyReceipt, triggerParse]);
+  }, [params.id, applyReceipt]);
 
   function updateItem(index: number, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -262,13 +281,48 @@ export default function ReviewPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Review receipt</h1>
-        {receipt && statusBadge(phase === 'parsing' ? 'processing' : receipt.status)}
+        <div className="flex items-center gap-2">
+          {phase === 'review' && (() => {
+            const parser = parserUsed(receipt?.claudeRaw ?? null);
+            if (!parser) return null;
+            return (
+              <>
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    parser === 'ai'
+                      ? 'bg-purple-50 text-purple-700'
+                      : 'bg-blue-50 text-blue-700'
+                  }`}
+                  title={
+                    parser === 'ai'
+                      ? 'Parsed with AI (OpenRouter)'
+                      : parser === 'local'
+                        ? 'Parsed locally on the server — no AI request'
+                        : 'Manual entry'
+                  }
+                >
+                  {parser === 'ai' ? 'AI' : parser === 'local' ? 'Local' : 'Manual'}
+                </span>
+                {parser !== 'ai' && (
+                  <button
+                    onClick={() => triggerParse('ai')}
+                    className="text-xs text-gray-400 hover:text-purple-600 underline decoration-dotted"
+                    title="Replaces the items below with an AI reading"
+                  >
+                    Re-read with AI
+                  </button>
+                )}
+              </>
+            );
+          })()}
+          {receipt && statusBadge(phase === 'parsing' ? 'processing' : receipt.status)}
+        </div>
       </div>
 
       {error && (
         <div className="bg-red-50 text-red-600 p-3 rounded text-sm flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={triggerParse} className="underline font-medium ml-4">
+          <button onClick={() => triggerParse('auto')} className="underline font-medium ml-4">
             Retry
           </button>
         </div>
@@ -305,7 +359,29 @@ export default function ReviewPage() {
         </div>
 
         <div className="space-y-4">
-          {phase === 'parsing' ? (
+          {phase === 'choice' ? (
+            <div className="bg-white rounded-lg shadow p-6 space-y-3">
+              <p className="text-sm text-gray-600">How do you want to enter this receipt?</p>
+              <button
+                onClick={() => triggerParse('auto')}
+                className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-medium"
+              >
+                Read automatically
+                <span className="block text-xs font-normal text-green-100">
+                  Free local reading first — AI only when the numbers don&apos;t add up
+                </span>
+              </button>
+              <button
+                onClick={() => triggerParse('manual')}
+                className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200 font-medium"
+              >
+                Enter manually
+                <span className="block text-xs font-normal text-gray-400">
+                  No parsing — tap words on the image to build each item
+                </span>
+              </button>
+            </div>
+          ) : phase === 'parsing' ? (
             <div className="bg-white rounded-lg shadow p-6 text-center">
               <div className="animate-pulse text-sm text-gray-500">
                 Reading the receipt... This takes up to 30 seconds.
