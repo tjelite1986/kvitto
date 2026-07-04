@@ -3,6 +3,9 @@ const nextConfig = {
   output: 'standalone',
   experimental: {
     serverComponentsExternalPackages: ['better-sqlite3', 'sharp'],
+    // Under QEMU emulation (CI arm64 build) the V8 JIT in forked build
+    // workers randomly hits SIGILL; single-worker mode avoids it.
+    ...(process.env.CI_LIMIT_WORKERS === '1' ? { cpus: 1, workerThreads: false } : {}),
   },
   headers: async () => [
     {

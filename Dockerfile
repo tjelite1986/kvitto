@@ -15,7 +15,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+ARG CI_LIMIT_WORKERS=""
+ENV CI_LIMIT_WORKERS=$CI_LIMIT_WORKERS
+# Retry once: QEMU cross-builds can still hit a transient V8 SIGILL
+RUN npm run build || npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
