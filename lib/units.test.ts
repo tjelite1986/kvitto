@@ -21,6 +21,11 @@ describe('comparisonPriceOre', () => {
     expect(comparisonPriceOre(8990, 1, 'kg')).toEqual({ ore: 8990, per: 'kg' });
   });
 
+  it('converts hectograms to per kg', () => {
+    // 8.95 kr for 1 hg → 89.50 kr/kg
+    expect(comparisonPriceOre(895, 1, 'hg')).toEqual({ ore: 8950, per: 'kg' });
+  });
+
   it('returns null for pieces, missing or invalid amounts', () => {
     expect(comparisonPriceOre(941, 6, 'pc')).toBeNull();
     expect(comparisonPriceOre(941, null, 'l')).toBeNull();
@@ -40,6 +45,7 @@ describe('parseAmountFromText', () => {
     expect(parseAmountFromText('PWK ENERGY 25 CL')).toEqual({ value: 25, unit: 'cl' });
     expect(parseAmountFromText('PRINGLES 200G')).toEqual({ value: 200, unit: 'g' });
     expect(parseAmountFromText('KETCHUP 500 GR')).toEqual({ value: 500, unit: 'g' });
+    expect(parseAmountFromText('LOSGODIS 2 HG')).toEqual({ value: 2, unit: 'hg' });
   });
 
   it('takes the last size when several match', () => {

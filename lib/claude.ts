@@ -135,6 +135,7 @@ Swedish receipt conventions:
 - Multi-buy offers ("2 för 45,00", "4 för 24", "3 f 30:-") set offer_qty and offer_total_ore on the item: offer_total_ore is what the customer actually pays for those units (excluding pant). Receipts often print the shelf price first and then a discount/adjustment line that creates the offer — e.g. "ENERGIDRYCK 4 st x 9,41 = 37,64" followed by "4 FÖR 24,00 -13,64": that is ONE item with qty=4, unit_price_ore=941, line_total_ore=3764, offer_qty=4, offer_total_ore=2400, discount_ore=0. Never put the same rebate in BOTH offer fields and discount_ore.
 - Plain discount lines ("RABATT", "PRISNEDSATT", negative amounts) that are NOT an N-för-X offer modify the PRECEDING item: put the amount in that item's discount_ore (positive integer), do not create a separate item.
 - Weight items print like "0,456 kg x 39,90 kr/kg": qty is the weight (0.456), unit is "kg", unit_price_ore is the per-kg price (3990).
+- Hectogram lines (pick-and-mix candy: "4,5 hg x 8,95 kr/hg") must be CONVERTED to kg: qty = hg / 10 (0.45), unit "kg", unit_price_ore = per-hg price x 10 (8950). Never output hg quantities.
 - Quantity lines like "2 st x 12,90" mean qty=2, unit_price_ore=1290, line_total_ore=2580.
 - Do NOT create items for: PANT lines, VAT summaries (MOMS), subtotals, payment lines (KORT, KONTANT, Mastercard), change (VÄXEL), loyalty points, opening hours, addresses, or "Att betala".
 - Sanity: sum over items of (offer_total_ore if set, else line_total_ore) - discount_ore + pant_ore should equal the receipt total.

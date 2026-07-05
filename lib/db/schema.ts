@@ -96,7 +96,7 @@ export const products = sqliteTable('products', {
   // Package amount, e.g. 1.5 + 'l', 330 + 'ml', 500 + 'g'. Drives the
   // comparison price (jämförpris) per kg/l — see lib/units.ts.
   amountValue: real('amount_value'),
-  amountUnit: text('amount_unit', { enum: ['g', 'kg', 'ml', 'cl', 'l', 'pc'] }),
+  amountUnit: text('amount_unit', { enum: ['g', 'hg', 'kg', 'ml', 'cl', 'l', 'pc'] }),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 

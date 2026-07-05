@@ -120,6 +120,26 @@ describe('parseLocally — Willys style (multi-line items)', () => {
   });
 });
 
+describe('parseLocally — hectogram lines (lösgodis)', () => {
+  it('converts hg quantities and per-hg prices to kg', () => {
+    const lines = [
+      'HEMKOP TORPA',
+      'Kvitto 2026-07-05 12:00',
+      'LOSGODIS',
+      '4,5 hg x 8,95 kr/hg 40,28',
+      'TOTALT 40,28',
+      'KORT 40,28',
+    ];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(checksumOk).toBe(true);
+    const candy = parsed.items.find((i) => i.name.includes('LOSGODIS'))!;
+    expect(candy.unit).toBe('kg');
+    expect(candy.qty).toBeCloseTo(0.45);
+    expect(candy.unit_price_ore).toBe(8950);
+    expect(candy.line_total_ore).toBe(4028);
+  });
+});
+
 describe('parseLocally — OCR quirks', () => {
   it('handles a space inside the price ("29, 90" from tesseract 5.5)', () => {
     const lines = WILLYS_LINES.map((l) =>

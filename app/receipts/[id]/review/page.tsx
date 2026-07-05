@@ -13,12 +13,28 @@ import ReceiptImageViewer, {
 } from '@/components/review/ReceiptImageViewer';
 import ProductPicker, { type ProductSuggestion } from '@/components/review/ProductPicker';
 
+// 'hg' is an entry convenience for lösgodis lines printed per hectogram —
+// converted to kg on save (qty / 10, unit price x 10), never stored.
+type EntryUnit = 'pc' | 'kg' | 'hg';
+
+function toStoredItem<T extends { qty: number; unit: EntryUnit; unitPriceOre: number | null }>(
+  item: T
+): T & { unit: 'pc' | 'kg' } {
+  if (item.unit !== 'hg') return item as T & { unit: 'pc' | 'kg' };
+  return {
+    ...item,
+    qty: item.qty / 10,
+    unit: 'kg' as const,
+    unitPriceOre: item.unitPriceOre != null ? item.unitPriceOre * 10 : null,
+  };
+}
+
 interface ItemRow {
   rawText: string;
   productId: number | null;
   productName?: string | null;
   qty: number;
-  unit: 'pc' | 'kg';
+  unit: EntryUnit;
   unitPriceOre: number | null;
   lineTotalOre: number;
   offerQty: number | null;
@@ -256,7 +272,7 @@ export default function ReviewPage() {
         purchaseDate: purchaseDate || null,
         purchaseTime: purchaseTime || null,
         totalOre: inputToOre(totalKr),
-        items,
+        items: items.map(toStoredItem),
       }),
     });
     if (!res.ok) {
@@ -510,11 +526,12 @@ export default function ReviewPage() {
                         <label className="block text-[10px] text-gray-400">Unit</label>
                         <select
                           value={item.unit}
-                          onChange={(e) => updateItem(index, { unit: e.target.value as 'pc' | 'kg' })}
+                          onChange={(e) => updateItem(index, { unit: e.target.value as EntryUnit })}
                           className={inputClass}
                         >
                           <option value="pc">pc</option>
                           <option value="kg">kg</option>
+                          <option value="hg">hg</option>
                         </select>
                       </div>
                       <div>
@@ -536,6 +553,12 @@ export default function ReviewPage() {
                         />
                       </div>
                     </div>
+                    {item.unit === 'hg' && (
+                      <p className="text-[10px] text-gray-400 pl-4">
+                        Saved as {(item.qty / 10).toLocaleString('sv-SE')} kg
+                        {item.unitPriceOre != null && ` × ${formatKr(item.unitPriceOre * 10)}/kg`}
+                      </p>
+                    )}
                     <div className="pl-4 flex items-center justify-between gap-2">
                       <ProductPicker
                         productId={item.productId}

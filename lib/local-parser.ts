@@ -22,7 +22,9 @@ const DISCOUNT_RE = /\b(RABATT|PRISNEDSATT|PRISNEDS|S[ÄA]NKT|EXTRAPRIS|KAMPANJ)
 // x/* between qty and price is sometimes OCR'd as +
 const OFFER_RE = /(\d+)\s*(?:F[ÖO0]R|F)\s+(\d{1,5})\s?[,.]\s?(\d{2})/i;
 const QTY_RE = /(\d+)\s*ST\s*[xX*+]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
-const WEIGHT_RE = /(\d+\s?[,.]\s?\d{1,3})\s*KG\s*[xX*+]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
+// Weight lines are usually per kg; hectogram lines (lösgodis) are converted
+// to kg on parse (qty / 10, unit price x 10) so everything is stored per kg.
+const WEIGHT_RE = /(\d+\s?[,.]\s?\d{1,3})\s*(KG|HG)\s*[xX*+]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
 const MONEY_TOKEN_RE = /-?\s?\d{1,5}\s?[,.]\s?\d{2}(?!\d)/g;
 const DASHED_RE = /^[-—_=* ]{6,}$/;
 
@@ -163,8 +165,11 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
     // "0,812 kg x 14,90 kr/kg TOTAL" — weight line, own or inline
     const weight = text.match(WEIGHT_RE);
     if (weight) {
-      const kg = Number(weight[1].replace(/\s/g, '').replace(',', '.'));
-      const perKg = Number(weight[2]) * 100 + Number(weight[3]);
+      const isHg = weight[2].toUpperCase() === 'HG';
+      const amount = Number(weight[1].replace(/\s/g, '').replace(',', '.'));
+      const perAmount = Number(weight[3]) * 100 + Number(weight[4]);
+      const kg = isHg ? amount / 10 : amount;
+      const perKg = isHg ? perAmount * 10 : perAmount;
       const inlineName = stripMoneyAndNoise(text.slice(0, weight.index ?? 0));
       let item: ParsedItem | null;
       if (hasLetters(inlineName)) {

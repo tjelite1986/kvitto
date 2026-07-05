@@ -2,12 +2,13 @@
 // A product can carry a package amount (1.5 l, 330 ml, 500 g); combined with
 // the per-piece price this yields a comparison price per kg or per liter.
 
-export type AmountUnit = 'g' | 'kg' | 'ml' | 'cl' | 'l' | 'pc';
+export type AmountUnit = 'g' | 'hg' | 'kg' | 'ml' | 'cl' | 'l' | 'pc';
 
-export const AMOUNT_UNITS: AmountUnit[] = ['g', 'kg', 'ml', 'cl', 'l', 'pc'];
+export const AMOUNT_UNITS: AmountUnit[] = ['g', 'hg', 'kg', 'ml', 'cl', 'l', 'pc'];
 
 const TO_BASE: Record<string, { factor: number; base: 'kg' | 'l' }> = {
   g: { factor: 1 / 1000, base: 'kg' },
+  hg: { factor: 1 / 10, base: 'kg' },
   kg: { factor: 1, base: 'kg' },
   ml: { factor: 1 / 1000, base: 'l' },
   cl: { factor: 1 / 100, base: 'l' },
@@ -59,7 +60,7 @@ export function normalizeAmountFields(amountValue: unknown, amountUnit: unknown)
 // "COCA-COLA ZERO 1,5L", "PRINGLES 200G", "PWK 25 CL" → package amount.
 // Piece counts ("4 ST") are purchase quantities, not package sizes: ignored.
 // The LAST match wins — sizes usually trail the name.
-const AMOUNT_RE = /(\d+(?:[.,]\d+)?)\s*(KG|GR?|ML|CL|L)\b/gi;
+const AMOUNT_RE = /(\d+(?:[.,]\d+)?)\s*(KG|HG|GR?|ML|CL|L)\b/gi;
 
 export function parseAmountFromText(
   text: string
