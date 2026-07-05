@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ImageCropper from './ImageCropper';
 
 interface ScanDialogProps {
   open: boolean;
@@ -19,6 +20,7 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [cropMode, setCropMode] = useState(false);
 
   if (!open) return null;
 
@@ -26,6 +28,7 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
     setError('');
     setFile(f);
     setPreviewFailed(false);
+    setCropMode(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(f));
     // Sniff the content — Android pickers often deliver PDFs with a generic
@@ -59,6 +62,16 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
     setPreviewFailed(false);
     setError('');
     setUploading(false);
+    setCropMode(false);
+  }
+
+  // Replace the selected image with the cropped JPEG and return to preview
+  function handleCropped(blob: Blob) {
+    const cropped = new File([blob], 'receipt-cropped.jpg', { type: 'image/jpeg' });
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(cropped);
+    setPreviewUrl(URL.createObjectURL(cropped));
+    setCropMode(false);
   }
 
   function close() {
@@ -150,6 +163,12 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
               className="hidden"
             />
           </div>
+        ) : cropMode && previewUrl ? (
+          <ImageCropper
+            src={previewUrl}
+            onCancel={() => setCropMode(false)}
+            onCrop={handleCropped}
+          />
         ) : (
           <div>
             {isPdf || previewFailed ? (
@@ -181,6 +200,15 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
               >
                 Retake
               </button>
+              {!isPdf && !previewFailed && (
+                <button
+                  onClick={() => setCropMode(true)}
+                  disabled={uploading}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-gray-200 text-sm font-medium disabled:opacity-50"
+                >
+                  Crop
+                </button>
+              )}
               <button
                 onClick={upload}
                 disabled={uploading}

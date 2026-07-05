@@ -98,10 +98,13 @@ const RECEIPT_SCHEMA = {
             type: ['string', 'null'],
             description: 'Brand name if identifiable from the item text, e.g. "Coca-Cola", "Heinz", "PowerKing". null if unknown — never guess.',
           },
+          // NOTE: no enum on the nullable suggestion fields — Anthropic's
+          // json_schema validator rejects enum combined with type
+          // ['string','null'] ("Enum value X does not match declared type").
+          // Allowed values are enforced softly via description + prompt.
           category: {
             type: ['string', 'null'],
-            enum: [...ITEM_CATEGORIES, null],
-            description: 'Product category, null if unclear',
+            description: `Product category, one of: ${ITEM_CATEGORIES.join(', ')}. null if unclear.`,
           },
           amount_value: {
             type: ['number', 'null'],
@@ -109,8 +112,7 @@ const RECEIPT_SCHEMA = {
           },
           amount_unit: {
             type: ['string', 'null'],
-            enum: ['g', 'kg', 'ml', 'cl', 'l', null],
-            description: 'Unit of the package size, null when amount_value is null',
+            description: 'Unit of the package size: one of g, hg, kg, ml, cl, l. null when amount_value is null.',
           },
         },
         required: [
