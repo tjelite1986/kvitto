@@ -16,6 +16,9 @@ const OBSERVATIONS_CTE = `
       ri.qty,
       ri.unit,
       ri.discount_ore,
+      ri.pant_ore,
+      ri.offer_qty,
+      ri.offer_total_ore,
       CAST(ROUND(CASE
         WHEN ri.offer_qty IS NOT NULL AND ri.offer_total_ore IS NOT NULL AND ri.offer_qty > 0
           THEN ri.offer_total_ore * 1.0 / ri.offer_qty
@@ -44,6 +47,7 @@ export interface StorePrice {
   storeId: number;
   storeName: string;
   unitPriceOre: number;
+  unit: string; // 'kg' observations are already a per-kg price
   previousPriceOre: number | null;
   purchaseDate: string;
 }
@@ -51,29 +55,44 @@ export interface StorePrice {
 export interface ProductListEntry {
   id: number;
   name: string;
+  brand: string | null;
   category: string | null;
+  amountValue: number | null;
+  amountUnit: string | null;
   prices: StorePrice[];
 }
 
 /** Products with their latest (and previous) price per store. */
 export function productsWithLatestPrice(search?: string): ProductListEntry[] {
   const term = search?.trim();
+  const productSelect = `SELECT id, name, brand, category,
+      amount_value AS amountValue, amount_unit AS amountUnit FROM products`;
   const products = (
     term
       ? sqlite
           .prepare(
-            `SELECT id, name, category FROM products
-             WHERE name LIKE '%' || ? || '%' COLLATE NOCASE ORDER BY name`
+            `${productSelect}
+             WHERE (name LIKE '%' || ? || '%' COLLATE NOCASE
+                OR brand LIKE '%' || ? || '%' COLLATE NOCASE
+                OR category LIKE '%' || ? || '%' COLLATE NOCASE)
+             ORDER BY name`
           )
-          .all(term)
-      : sqlite.prepare(`SELECT id, name, category FROM products ORDER BY name`).all()
-  ) as Array<{ id: number; name: string; category: string | null }>;
+          .all(term, term, term)
+      : sqlite.prepare(`${productSelect} ORDER BY name`).all()
+  ) as Array<{
+    id: number;
+    name: string;
+    brand: string | null;
+    category: string | null;
+    amountValue: number | null;
+    amountUnit: string | null;
+  }>;
 
   const priceRows = sqlite
     .prepare(
       `${OBSERVATIONS_CTE}
        SELECT latest.product_id, latest.store_id, latest.store_name,
-              latest.unit_price_ore, latest.purchase_date,
+              latest.unit_price_ore, latest.unit, latest.purchase_date,
               prev.unit_price_ore AS previous_price_ore
        FROM obs latest
        LEFT JOIN obs prev
@@ -87,6 +106,7 @@ export function productsWithLatestPrice(search?: string): ProductListEntry[] {
     store_id: number;
     store_name: string;
     unit_price_ore: number;
+    unit: string;
     purchase_date: string;
     previous_price_ore: number | null;
   }>;
@@ -98,6 +118,7 @@ export function productsWithLatestPrice(search?: string): ProductListEntry[] {
       storeId: row.store_id,
       storeName: row.store_name,
       unitPriceOre: row.unit_price_ore,
+      unit: row.unit,
       previousPriceOre: row.previous_price_ore,
       purchaseDate: row.purchase_date,
     });
@@ -115,6 +136,9 @@ export interface PriceObservation {
   qty: number;
   unit: string;
   discountOre: number;
+  pantOre: number; // deposit for the whole line — divide by qty for per-can pant
+  offerQty: number | null; // multi-buy applied, e.g. 4 for 24.00
+  offerTotalOre: number | null;
   receiptId: number;
 }
 
@@ -123,7 +147,8 @@ export function priceHistory(productId: number): PriceObservation[] {
   const rows = sqlite
     .prepare(
       `${OBSERVATIONS_CTE}
-       SELECT store_id, store_name, purchase_date, unit_price_ore, qty, unit, discount_ore, receipt_id
+       SELECT store_id, store_name, purchase_date, unit_price_ore, qty, unit,
+              discount_ore, pant_ore, offer_qty, offer_total_ore, receipt_id
        FROM obs
        WHERE product_id = ?
        ORDER BY purchase_date ASC, receipt_id ASC`
@@ -136,6 +161,9 @@ export function priceHistory(productId: number): PriceObservation[] {
     qty: number;
     unit: string;
     discount_ore: number;
+    pant_ore: number;
+    offer_qty: number | null;
+    offer_total_ore: number | null;
     receipt_id: number;
   }>;
 
@@ -147,6 +175,9 @@ export function priceHistory(productId: number): PriceObservation[] {
     qty: r.qty,
     unit: r.unit,
     discountOre: r.discount_ore,
+    pantOre: r.pant_ore,
+    offerQty: r.offer_qty,
+    offerTotalOre: r.offer_total_ore,
     receiptId: r.receipt_id,
   }));
 }

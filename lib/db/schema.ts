@@ -91,7 +91,12 @@ export const receiptItems = sqliteTable('receipt_items', {
 export const products = sqliteTable('products', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(), // canonical name
+  brand: text('brand'), // e.g. "Coca-Cola", "Heinz"
   category: text('category'),
+  // Package amount, e.g. 1.5 + 'l', 330 + 'ml', 500 + 'g'. Drives the
+  // comparison price (jämförpris) per kg/l — see lib/units.ts.
+  amountValue: real('amount_value'),
+  amountUnit: text('amount_unit', { enum: ['g', 'kg', 'ml', 'cl', 'l', 'pc'] }),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 

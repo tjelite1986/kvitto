@@ -5,6 +5,19 @@ import type Database from 'better-sqlite3';
 // lib/db/migrate.ts for manual runs. Future schema changes: add guarded
 // ALTER TABLEs below the CREATE block (check PRAGMA table_info first).
 
+// Guarded ALTER: parallel processes (e.g. next build page-data workers) can
+// both see the column as missing, so "duplicate column name" is ignored.
+function addColumnIfMissing(sqlite: Database.Database, table: string, columnDef: string): void {
+  const columnName = columnDef.split(' ')[0];
+  const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === columnName)) return;
+  try {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+  } catch (e) {
+    if (!(e instanceof Error && e.message.includes('duplicate column name'))) throw e;
+  }
+}
+
 export function bootstrapSchema(sqlite: Database.Database): void {
   sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -42,7 +55,10 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
+    brand TEXT,
     category TEXT,
+    amount_value REAL,
+    amount_unit TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -100,14 +116,13 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   `);
 
   // v2: pant became a per-line surcharge (pant_ore) instead of separate rows
-  const itemCols = sqlite.prepare(`PRAGMA table_info(receipt_items)`).all() as Array<{ name: string }>;
-  if (!itemCols.some((c) => c.name === 'pant_ore')) {
-    sqlite.exec(`ALTER TABLE receipt_items ADD COLUMN pant_ore INTEGER NOT NULL DEFAULT 0`);
-  }
+  addColumnIfMissing(sqlite, 'receipt_items', 'pant_ore INTEGER NOT NULL DEFAULT 0');
 
   // v3: purchase time of day
-  const receiptCols = sqlite.prepare(`PRAGMA table_info(receipts)`).all() as Array<{ name: string }>;
-  if (!receiptCols.some((c) => c.name === 'purchase_time')) {
-    sqlite.exec(`ALTER TABLE receipts ADD COLUMN purchase_time TEXT`);
-  }
+  addColumnIfMissing(sqlite, 'receipts', 'purchase_time TEXT');
+
+  // v4: product brand + package amount (comparison price)
+  addColumnIfMissing(sqlite, 'products', 'brand TEXT');
+  addColumnIfMissing(sqlite, 'products', 'amount_value REAL');
+  addColumnIfMissing(sqlite, 'products', 'amount_unit TEXT');
 }

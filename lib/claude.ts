@@ -15,7 +15,20 @@ export interface ParsedItem {
   discount_ore: number;
   pant_ore: number;
   source_lines: string[];
+  // Product metadata suggestions (AI parser only — optional so the local
+  // parser can skip them). Used to prefill product creation during review.
+  brand?: string | null;
+  category?: string | null;
+  amount_value?: number | null;
+  amount_unit?: 'g' | 'kg' | 'ml' | 'cl' | 'l' | null;
 }
+
+// Suggested categories the parser picks from (free text in the DB).
+export const ITEM_CATEGORIES = [
+  'Dryck', 'Godis', 'Snacks', 'Frukt', 'Grönsaker', 'Mejeri', 'Ost',
+  'Kött', 'Fisk', 'Chark', 'Bröd', 'Fryst', 'Skafferi', 'Färdigmat',
+  'Hygien', 'Hushåll', 'Djur', 'Övrigt',
+] as const;
 
 export interface ParsedReceipt {
   store_name: string | null;
@@ -81,10 +94,29 @@ const RECEIPT_SCHEMA = {
             items: { type: 'string' },
             description: 'The OCR text lines this item was read from, verbatim (including its PANT and RABATT lines)',
           },
+          brand: {
+            type: ['string', 'null'],
+            description: 'Brand name if identifiable from the item text, e.g. "Coca-Cola", "Heinz", "PowerKing". null if unknown — never guess.',
+          },
+          category: {
+            type: ['string', 'null'],
+            enum: [...ITEM_CATEGORIES, null],
+            description: 'Product category, null if unclear',
+          },
+          amount_value: {
+            type: ['number', 'null'],
+            description: 'Package size printed in the item text, e.g. 1.5 for "1,5L" or 330 for "330ML". NOT the purchase quantity. null if not printed.',
+          },
+          amount_unit: {
+            type: ['string', 'null'],
+            enum: ['g', 'kg', 'ml', 'cl', 'l', null],
+            description: 'Unit of the package size, null when amount_value is null',
+          },
         },
         required: [
           'name', 'qty', 'unit', 'unit_price_ore', 'line_total_ore',
           'offer_qty', 'offer_total_ore', 'discount_ore', 'pant_ore', 'source_lines',
+          'brand', 'category', 'amount_value', 'amount_unit',
         ],
         additionalProperties: false,
       },
@@ -108,7 +140,8 @@ Swedish receipt conventions:
 - Sanity: sum over items of (offer_total_ore if set, else line_total_ore) - discount_ore + pant_ore should equal the receipt total.
 - The grand total is usually labelled "TOTALT", "ATT BETALA", "SUMMA" or "Total".
 - The OCR text may contain recognition errors; use the image to resolve them. In source_lines, quote the OCR lines VERBATIM as given (even if misrecognized) so they can be located later.
-- purchase_date: receipts print dates like "2026-07-01", "26-07-01" or "01.07.26"; output YYYY-MM-DD. The time usually follows the date ("2026-07-01 17:42"); output it as purchase_time in 24h HH:MM.`;
+- purchase_date: receipts print dates like "2026-07-01", "26-07-01" or "01.07.26"; output YYYY-MM-DD. The time usually follows the date ("2026-07-01 17:42"); output it as purchase_time in 24h HH:MM.
+- Product metadata: for each item also suggest brand, category, amount_value and amount_unit when identifiable from the printed text. brand is the manufacturer/brand ("COCA-COLA ZERO 1,5L" → "Coca-Cola"); use null rather than guessing. amount_value/amount_unit is the PACKAGE size printed in the name ("1,5L" → 1.5 + "l", "330ML" → 330 + "ml", "500G" → 500 + "g") — never the purchase quantity ("4 st" is qty, not a package size). Pick category from the allowed list, null if unclear.`;
 
 export interface StoreContext {
   layoutHints: string;

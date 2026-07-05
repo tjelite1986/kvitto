@@ -11,7 +11,7 @@ import ReceiptImageViewer, {
   ITEM_COLORS,
   type OverlayWord,
 } from '@/components/review/ReceiptImageViewer';
-import ProductPicker from '@/components/review/ProductPicker';
+import ProductPicker, { type ProductSuggestion } from '@/components/review/ProductPicker';
 
 interface ItemRow {
   rawText: string;
@@ -26,6 +26,28 @@ interface ItemRow {
   discountOre: number;
   pantOre: number;
   bbox: string | null;
+  suggestion?: ProductSuggestion | null; // parser-suggested brand/category/amount
+}
+
+// Product metadata suggested by the AI parser, kept in claude_raw and matched
+// back to the stored items by line position.
+function itemSuggestions(claudeRaw: string | null, items: ItemRow[]): (ProductSuggestion | null)[] {
+  try {
+    const parsedItems = JSON.parse(claudeRaw ?? '{}').parsed?.items ?? [];
+    return items.map((item, i) => {
+      const p = parsedItems[i];
+      if (!p || p.name !== item.rawText) return null;
+      if (p.brand == null && p.category == null && p.amount_value == null) return null;
+      return {
+        brand: p.brand ?? null,
+        category: p.category ?? null,
+        amountValue: p.amount_value ?? null,
+        amountUnit: p.amount_unit ?? null,
+      };
+    });
+  } catch {
+    return items.map(() => null);
+  }
 }
 
 interface ReceiptDetail {
@@ -107,7 +129,9 @@ export default function ReviewPage() {
 
   const applyReceipt = useCallback((data: ReceiptDetail) => {
     setReceipt(data);
-    setItems(data.items ?? []);
+    const loaded = data.items ?? [];
+    const suggestions = itemSuggestions(data.claudeRaw, loaded);
+    setItems(loaded.map((item, i) => ({ ...item, suggestion: suggestions[i] })));
     setStoreName(data.storeName ?? '');
     setPurchaseDate(data.purchaseDate ?? '');
     setPurchaseTime(data.purchaseTime ?? '');
@@ -517,6 +541,7 @@ export default function ReviewPage() {
                         productId={item.productId}
                         productName={item.productName ?? null}
                         suggestion={item.rawText}
+                        details={item.suggestion ?? null}
                         onChange={(productId, productName) =>
                           updateItem(index, { productId, productName })
                         }

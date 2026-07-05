@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, sessionUserId } from '@/lib/auth';
-import { sqlite } from '@/lib/db';
+import { db, sqlite } from '@/lib/db';
+import { stores } from '@/lib/db/schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,4 +36,34 @@ export async function GET() {
   return NextResponse.json(
     rows.map((r) => ({ ...r, exampleCount: JSON.parse(r.examples).length, examples: undefined }))
   );
+}
+
+// Create a store ahead of time, before any receipt from it is scanned.
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!sessionUserId(session)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { name, city } = await req.json();
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return NextResponse.json({ error: 'Store name is required' }, { status: 400 });
+  }
+
+  try {
+    const store = db
+      .insert(stores)
+      .values({
+        name: name.trim(),
+        city: typeof city === 'string' && city.trim() ? city.trim() : null,
+      })
+      .returning()
+      .get();
+    return NextResponse.json(store);
+  } catch (e: any) {
+    if (e.message?.includes('UNIQUE')) {
+      return NextResponse.json({ error: 'Store already exists' }, { status: 409 });
+    }
+    throw e;
+  }
 }
