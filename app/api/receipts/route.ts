@@ -50,6 +50,7 @@ export async function GET() {
       id: receipts.id,
       storeId: receipts.storeId,
       storeName: stores.name,
+      originalFilename: receipts.originalFilename,
       purchaseDate: receipts.purchaseDate,
       purchaseTime: receipts.purchaseTime,
       totalOre: receipts.totalOre,
@@ -107,9 +108,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Keep the picker's file name (e.g. "Kvitto-1.pdf") for display. Some
+  // Android pickers report an empty or generic name — store what we get.
+  const originalFilename = typeof file.name === 'string' && file.name.trim()
+    ? file.name.trim().slice(0, 255)
+    : null;
+
   const receipt = db
     .insert(receipts)
-    .values({ userId, imagePath: '', status: 'uploaded' })
+    .values({ userId, imagePath: '', originalFilename, status: 'uploaded' })
     .returning()
     .get();
 

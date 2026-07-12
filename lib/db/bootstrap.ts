@@ -82,6 +82,7 @@ export function bootstrapSchema(sqlite: Database.Database): void {
     purchase_time TEXT,
     total_ore INTEGER,
     image_path TEXT NOT NULL,
+    original_filename TEXT,
     image_width INTEGER,
     image_height INTEGER,
     ocr_data TEXT,
@@ -125,4 +126,7 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   addColumnIfMissing(sqlite, 'products', 'brand TEXT');
   addColumnIfMissing(sqlite, 'products', 'amount_value REAL');
   addColumnIfMissing(sqlite, 'products', 'amount_unit TEXT');
+
+  // v5: original name of the uploaded file (e.g. "Kvitto-1.pdf")
+  addColumnIfMissing(sqlite, 'receipts', 'original_filename TEXT');
 }

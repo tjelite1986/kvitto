@@ -48,6 +48,7 @@ export const receipts = sqliteTable('receipts', {
   purchaseTime: text('purchase_time'), // HH:MM
   totalOre: integer('total_ore'),
   imagePath: text('image_path').notNull(), // directory under data/receipts, relative to data dir
+  originalFilename: text('original_filename'), // name of the uploaded file, e.g. "Kvitto-1.pdf"
   imageWidth: integer('image_width'),
   imageHeight: integer('image_height'),
   // JSON: { words: [{ t, x, y, w, h, conf, line }], lines: [{ text, x, y, w, h }], text }

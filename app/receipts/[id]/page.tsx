@@ -29,6 +29,7 @@ interface ReceiptDetail {
   id: number;
   status: string;
   storeName: string | null;
+  originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
   totalOre: number | null;
@@ -73,6 +74,9 @@ export default function ReceiptDetailPage() {
           <p className="text-sm text-gray-400">
             {receipt.purchaseDate}
             {receipt.purchaseTime && ` kl ${receipt.purchaseTime}`}
+            {receipt.originalFilename && (
+              <span className="ml-2 text-xs text-gray-300">{receipt.originalFilename}</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3">

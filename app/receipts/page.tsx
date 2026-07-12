@@ -8,6 +8,7 @@ import { formatKr, statusBadge } from '@/lib/format';
 interface ReceiptRow {
   id: number;
   storeName: string | null;
+  originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
   totalOre: number | null;
@@ -84,7 +85,9 @@ export default function ReceiptsPage() {
                     loading="lazy"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{r.storeName ?? 'Unknown store'}</p>
+                    <p className="text-sm font-medium truncate">
+                      {r.storeName ?? r.originalFilename ?? 'Unknown store'}
+                    </p>
                     <p className="text-xs text-gray-400">
                       {r.purchaseDate ?? r.createdAt.slice(0, 10)}
                       {r.purchaseTime && ` kl ${r.purchaseTime}`}

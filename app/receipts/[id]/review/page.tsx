@@ -71,6 +71,7 @@ interface ReceiptDetail {
   status: string;
   storeId: number | null;
   storeName: string | null;
+  originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
   totalOre: number | null;
@@ -338,7 +339,14 @@ export default function ReviewPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Review receipt</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold">Review receipt</h1>
+          {receipt?.originalFilename && (
+            <p className="text-xs text-gray-400 truncate" title={receipt.originalFilename}>
+              {receipt.originalFilename}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {phase === 'review' && (() => {
             const parser = parserUsed(receipt?.claudeRaw ?? null);
