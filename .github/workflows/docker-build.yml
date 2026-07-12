@@ -41,6 +41,10 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        with:
+          # Pinned: the runner-default QEMU intermittently SIGILLs V8/Node 20
+          # during next build on linux/arm64
+          image: tonistiigi/binfmt:qemu-v9.2.2
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

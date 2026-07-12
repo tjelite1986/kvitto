@@ -41,7 +41,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/lib/db/migrate.ts ./lib/db/migrate.ts
+# The whole lib/db dir: migrate.ts imports ./bootstrap, so copying only the
+# entrypoint ships a broken manual-migration script
+COPY --from=builder /app/lib/db ./lib/db
 COPY --from=builder /app/package.json ./package.json
 
 # One volume covers the SQLite db and all receipt images (data/receipts/...)
