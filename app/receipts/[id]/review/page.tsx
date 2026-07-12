@@ -142,6 +142,7 @@ export default function ReviewPage() {
   const [phase, setPhase] = useState<'loading' | 'choice' | 'parsing' | 'review' | 'saving' | 'error'>('loading');
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const applyReceipt = useCallback((data: ReceiptDetail) => {
     setReceipt(data);
@@ -261,6 +262,23 @@ export default function ReviewPage() {
     ]);
   }
 
+  async function deleteReceipt() {
+    if (deleting) return;
+    if (!window.confirm('Delete this receipt? This cannot be undone.')) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/receipts/${params.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        router.push('/receipts');
+        return;
+      }
+    } catch {
+      // fall through to the shared error path
+    }
+    setDeleting(false);
+    setError('Could not delete the receipt.');
+  }
+
   async function confirm() {
     setPhase('saving');
     setError('');
@@ -356,6 +374,13 @@ export default function ReviewPage() {
             );
           })()}
           {receipt && statusBadge(phase === 'parsing' ? 'processing' : receipt.status)}
+          <button
+            onClick={deleteReceipt}
+            disabled={deleting || phase === 'saving' || phase === 'parsing'}
+            className="text-sm text-red-500 hover:text-red-700 px-2 py-1.5 disabled:opacity-50"
+          >
+            Delete
+          </button>
         </div>
       </div>
 
