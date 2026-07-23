@@ -15,6 +15,7 @@ import {
   decayOverriddenAliases,
   parsedItemsFromRaw,
 } from '@/lib/learning';
+import { learnStoreKeyword } from '@/lib/store-detection';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const body = await req.json();
   const {
     storeId, storeName, purchaseDate, purchaseTime, totalOre,
-    pantReturnOre, receiptNumber, deliveryFeeOre, serviceFeeOre,
+    pantReturnOre, receiptNumber, deliveryFeeOre, serviceFeeOre, storeKeyword,
   } = body;
   const items: ConfirmItem[] = Array.isArray(body.items) ? body.items : [];
 
@@ -136,6 +137,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Store-level learning: fingerprint the layout and capture corrections
     // as few-shot examples for future parses at this store.
     if (resolvedStoreId != null) {
+      // User-taught keyword rule (marking the store text on the receipt).
+      if (typeof storeKeyword === 'string' && storeKeyword.trim()) {
+        try {
+          learnStoreKeyword(resolvedStoreId, storeKeyword.trim());
+        } catch (e) {
+          console.error('Store keyword learning failed:', e);
+        }
+      }
       if (receipt.ocrData) {
         try {
           learnFingerprint(resolvedStoreId, JSON.parse(receipt.ocrData));

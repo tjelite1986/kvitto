@@ -65,9 +65,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         .run();
     }
 
-    // Step 2: store detection via header fingerprint
+    // Step 2: store detection — user-taught keywords first, then header fingerprint
     const header = computeHeader(ocr.lines);
-    const detection = detectStore(header);
+    const detection = detectStore(header, ocr.text);
     const storeContext = detection ? loadStoreContext(detection.storeId) : null;
 
     // Manual mode: OCR only — the user builds the items via word taps

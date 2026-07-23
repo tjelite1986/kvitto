@@ -127,3 +127,16 @@ export const productAliases = sqliteTable('product_aliases', {
   uniqueIndex('product_aliases_store_alias_idx').on(t.storeId, t.aliasText),
   index('product_aliases_alias_idx').on(t.aliasText),
 ]);
+
+// User-taught rules: a keyword (e.g. "foodora") that identifies a store. When
+// it appears in a receipt's OCR text, that store is auto-detected. Learned by
+// marking the store text on the receipt during review.
+export const storeKeywords = sqliteTable('store_keywords', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  storeId: integer('store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
+  keyword: text('keyword').notNull(), // normalized text that identifies this store
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (t) => [
+  uniqueIndex('store_keywords_store_keyword_idx').on(t.storeId, t.keyword),
+  index('store_keywords_keyword_idx').on(t.keyword),
+]);

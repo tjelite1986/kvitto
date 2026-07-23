@@ -114,6 +114,15 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   );
   CREATE INDEX IF NOT EXISTS receipt_items_receipt_idx ON receipt_items(receipt_id);
   CREATE INDEX IF NOT EXISTS receipt_items_product_idx ON receipt_items(product_id);
+
+  CREATE TABLE IF NOT EXISTS store_keywords (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    keyword TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS store_keywords_store_keyword_idx ON store_keywords(store_id, keyword);
+  CREATE INDEX IF NOT EXISTS store_keywords_keyword_idx ON store_keywords(keyword);
   `);
 
   // v2: pant became a per-line surcharge (pant_ore) instead of separate rows

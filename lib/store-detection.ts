@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import { stores, storeFingerprints, storeProfiles } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { stores, storeFingerprints, storeProfiles, storeKeywords } from '@/lib/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { normalizeText, diceSimilarity } from '@/lib/matching';
 import type { OcrLine } from '@/lib/ocr';
 import type { StoreContext } from '@/lib/claude';
@@ -28,9 +28,33 @@ export interface StoreDetection {
   confidence: number;
 }
 
-/** Match the receipt header against stored fingerprints and store names. */
-export function detectStore(header: string): StoreDetection | null {
+// Confidence assigned when a user-taught store keyword matches — the strongest
+// signal, since the rule was set explicitly by the user.
+export const KEYWORD_MATCH_CONFIDENCE = 0.99;
+
+/**
+ * Match the receipt against stored data. `fullText` (whole OCR text) is used for
+ * user-taught keyword rules; `header` (first lines) for fingerprint/name match.
+ */
+export function detectStore(header: string, fullText?: string): StoreDetection | null {
   if (!header) return null;
+
+  // Highest priority: an explicit user-taught keyword present in the receipt.
+  const haystack = fullText ? normalizeText(fullText) : header;
+  const keywords = db
+    .select({
+      storeId: storeKeywords.storeId,
+      keyword: storeKeywords.keyword,
+      storeName: stores.name,
+    })
+    .from(storeKeywords)
+    .innerJoin(stores, eq(storeKeywords.storeId, stores.id))
+    .all();
+  for (const k of keywords) {
+    if (k.keyword && haystack.includes(k.keyword)) {
+      return { storeId: k.storeId, storeName: k.storeName, confidence: KEYWORD_MATCH_CONFIDENCE };
+    }
+  }
 
   let best: StoreDetection | null = null;
 
@@ -64,6 +88,22 @@ export function detectStore(header: string): StoreDetection | null {
   }
 
   return best;
+}
+
+/**
+ * Teach a keyword → store rule (from marking the store text during review).
+ * Stored normalized; deduped per store. Ignores too-short keywords.
+ */
+export function learnStoreKeyword(storeId: number, rawKeyword: string): void {
+  const keyword = normalizeText(rawKeyword);
+  if (!keyword || keyword.length < 2) return;
+  const existing = db
+    .select()
+    .from(storeKeywords)
+    .where(and(eq(storeKeywords.storeId, storeId), eq(storeKeywords.keyword, keyword)))
+    .get();
+  if (existing) return;
+  db.insert(storeKeywords).values({ storeId, keyword }).run();
 }
 
 /** Load the learning profile (layout hints + few-shot examples) for a store. */

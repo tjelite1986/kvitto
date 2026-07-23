@@ -152,6 +152,10 @@ export default function ReviewPage() {
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Where word taps on the receipt go: to the selected item, or to a
+  // receipt-level field. Marking the store also teaches a keyword rule.
+  const [tapTarget, setTapTarget] = useState<'item' | 'store' | 'receiptNo'>('item');
+  const [storeKeyword, setStoreKeyword] = useState('');
 
   const applyReceipt = useCallback((data: ReceiptDetail) => {
     setReceipt(data);
@@ -240,6 +244,17 @@ export default function ReviewPage() {
   }
 
   function handleWordTap(word: OverlayWord) {
+    // Receipt-level field targets: append the tapped word to the field. For the
+    // store, also accumulate the tapped text as the keyword to learn.
+    if (tapTarget === 'store') {
+      setStoreName((prev) => (prev ? `${prev} ${word.t}` : word.t));
+      setStoreKeyword((prev) => (prev ? `${prev} ${word.t}` : word.t));
+      return;
+    }
+    if (tapTarget === 'receiptNo') {
+      setReceiptNumber((prev) => (prev ? `${prev} ${word.t}` : word.t));
+      return;
+    }
     if (selectedIndex == null) return;
     setItems((prev) =>
       prev.map((item, i) => {
@@ -307,6 +322,7 @@ export default function ReviewPage() {
         deliveryFeeOre: inputToOre(deliveryFeeKr) ?? 0,
         serviceFeeOre: inputToOre(serviceFeeKr) ?? 0,
         receiptNumber: receiptNumber.trim() || null,
+        storeKeyword: storeKeyword.trim() || null,
         items: items.map(toStoredItem),
       }),
     });
@@ -435,11 +451,47 @@ export default function ReviewPage() {
                 onWordTap={handleWordTap}
                 onItemTap={setSelectedIndex}
               />
-              <p className="text-[11px] text-gray-400 mt-2 text-center">
-                {selectedIndex != null
-                  ? 'Tap words on the receipt to add them to the selected item.'
-                  : 'Select an item row, then tap words on the receipt to correct it.'}
-              </p>
+              <div className="mt-2">
+                <div className="flex items-center justify-center gap-1 text-xs">
+                  <span className="text-gray-400 mr-1">Tap words to fill:</span>
+                  {([
+                    ['item', 'Item'],
+                    ['store', 'Store'],
+                    ['receiptNo', 'Receipt no.'],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        setTapTarget(value);
+                        // Start a clean mark for a receipt-level field.
+                        if (value === 'store') { setStoreName(''); setStoreKeyword(''); }
+                        if (value === 'receiptNo') setReceiptNumber('');
+                      }}
+                      className={`px-2 py-1 rounded-full border ${
+                        tapTarget === value
+                          ? 'bg-green-600 text-white border-green-600'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5 text-center">
+                  {tapTarget === 'store'
+                    ? 'Tap the store name on the receipt (e.g. Foodora). It becomes the store and is remembered for next time.'
+                    : tapTarget === 'receiptNo'
+                    ? 'Tap the receipt/invoice number on the receipt.'
+                    : selectedIndex != null
+                    ? 'Tap words on the receipt to add them to the selected item.'
+                    : 'Select an item row, then tap words on the receipt to correct it.'}
+                </p>
+                {tapTarget === 'store' && storeKeyword.trim() && (
+                  <p className="text-[11px] text-green-600 mt-0.5 text-center">
+                    Will remember “{storeKeyword.trim()}” → this store
+                  </p>
+                )}
+              </div>
             </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
