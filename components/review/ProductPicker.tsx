@@ -45,6 +45,9 @@ export default function ProductPicker({
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ name: '', brand: '', category: '', amountValue: '', amountUnit: '' });
   const [createError, setCreateError] = useState('');
+  // Visible viewport (shrinks when the mobile keyboard opens) so the sheet can
+  // sit directly above the keyboard instead of being hidden behind it.
+  const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -75,6 +78,23 @@ export default function ProductPicker({
       document.removeEventListener('keydown', onKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Track the visual viewport so the bottom sheet stays above the on-screen
+  // keyboard (the layout viewport doesn't shrink when the keyboard opens).
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewport({ top: vv.offsetTop, height: vv.height });
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      setViewport(null);
+    };
   }, [open]);
 
   function openModal() {
@@ -184,11 +204,12 @@ export default function ProductPicker({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4"
+          className="fixed left-0 right-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4"
+          style={viewport ? { top: viewport.top, height: viewport.height } : { top: 0, bottom: 0 }}
           onClick={close}
         >
           <div
-            className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col max-h-[85vh] sm:max-h-[75vh]"
+            className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col max-h-full sm:max-h-[75vh]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -269,14 +290,13 @@ export default function ProductPicker({
               <>
                 <div className="p-3 border-b border-gray-100">
                   <input
-                    autoFocus
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search products..."
                     className={fieldClass}
                   />
                 </div>
-                <ul className="flex-1 overflow-y-auto p-2">
+                <ul className="flex-1 min-h-0 overflow-y-auto p-2">
                   {options.map((option) => (
                     <li key={option.id}>
                       <button
