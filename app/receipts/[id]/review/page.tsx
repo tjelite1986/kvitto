@@ -12,6 +12,14 @@ import ReceiptImageViewer, {
   type OverlayWord,
 } from '@/components/review/ReceiptImageViewer';
 import ProductPicker, { type ProductSuggestion } from '@/components/review/ProductPicker';
+import { STORE_CHANNELS, STORE_CATEGORIES } from '@/lib/store-categories';
+
+interface StoreOption {
+  id: number;
+  name: string;
+  channel: string | null;
+  category: string | null;
+}
 
 // 'hg' is an entry convenience for lösgodis lines printed per hectogram —
 // converted to kg on save (qty / 10, unit price x 10), never stored.
@@ -75,6 +83,8 @@ interface ReceiptDetail {
   purchaseDate: string | null;
   purchaseTime: string | null;
   receiptNumber: string | null;
+  storeChannel: string | null;
+  storeCategory: string | null;
   totalOre: number | null;
   pantReturnOre: number | null;
   deliveryFeeOre: number | null;
@@ -141,6 +151,9 @@ export default function ReviewPage() {
   const [receipt, setReceipt] = useState<ReceiptDetail | null>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [storeName, setStoreName] = useState('');
+  const [storeChannel, setStoreChannel] = useState('');
+  const [storeCategory, setStoreCategory] = useState('');
+  const [storeOptions, setStoreOptions] = useState<StoreOption[]>([]);
   const [purchaseDate, setPurchaseDate] = useState('');
   const [purchaseTime, setPurchaseTime] = useState('');
   const [totalKr, setTotalKr] = useState('');
@@ -163,6 +176,8 @@ export default function ReviewPage() {
     const suggestions = itemSuggestions(data.claudeRaw, loaded);
     setItems(loaded.map((item, i) => ({ ...item, suggestion: suggestions[i] })));
     setStoreName(data.storeName ?? '');
+    setStoreChannel(data.storeChannel ?? '');
+    setStoreCategory(data.storeCategory ?? '');
     setPurchaseDate(data.purchaseDate ?? '');
     setPurchaseTime(data.purchaseTime ?? '');
     setTotalKr(oreToInput(data.totalOre));
@@ -193,6 +208,28 @@ export default function ReviewPage() {
     },
     [params.id, applyReceipt]
   );
+
+  // Existing stores power the pick-from-list datalist and let us prefill the
+  // channel/category when the typed name matches a store we already know.
+  useEffect(() => {
+    fetch('/api/stores')
+      .then((r) => r.json())
+      .then((data) => Array.isArray(data) && setStoreOptions(data))
+      .catch(() => {});
+  }, []);
+
+  // Set the store name and, when it resolves to a known store, adopt that
+  // store's channel/category. Typing a brand-new name keeps the current picks.
+  function pickStore(name: string) {
+    setStoreName(name);
+    const match = storeOptions.find(
+      (s) => s.name.toLowerCase() === name.trim().toLowerCase()
+    );
+    if (match) {
+      setStoreChannel(match.channel ?? '');
+      setStoreCategory(match.category ?? '');
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/receipts/${params.id}`)
@@ -323,6 +360,8 @@ export default function ReviewPage() {
         serviceFeeOre: inputToOre(serviceFeeKr) ?? 0,
         receiptNumber: receiptNumber.trim() || null,
         storeKeyword: storeKeyword.trim() || null,
+        storeChannel: storeChannel || null,
+        storeCategory: storeCategory || null,
         items: items.map(toStoredItem),
       }),
     });
@@ -539,10 +578,42 @@ export default function ReviewPage() {
                   <label className="block text-xs font-medium text-gray-500 mb-1">Store</label>
                   <input
                     value={storeName}
-                    onChange={(e) => setStoreName(e.target.value)}
-                    placeholder="Store name"
+                    onChange={(e) => pickStore(e.target.value)}
+                    list="store-options"
+                    placeholder="Pick or type a store"
                     className={inputClass}
                   />
+                  <datalist id="store-options">
+                    {storeOptions.map((s) => (
+                      <option key={s.id} value={s.name} />
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Purchase</label>
+                  <select
+                    value={storeChannel}
+                    onChange={(e) => setStoreChannel(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">—</option>
+                    {STORE_CHANNELS.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                  <select
+                    value={storeCategory}
+                    onChange={(e) => setStoreCategory(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">—</option>
+                    {STORE_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>

@@ -16,6 +16,7 @@ import {
   parsedItemsFromRaw,
 } from '@/lib/learning';
 import { learnStoreKeyword } from '@/lib/store-detection';
+import { coerceChannel, coerceCategory } from '@/lib/store-categories';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const {
     storeId, storeName, purchaseDate, purchaseTime, totalOre,
     pantReturnOre, receiptNumber, deliveryFeeOre, serviceFeeOre, storeKeyword,
+    storeChannel, storeCategory,
   } = body;
   const items: ConfirmItem[] = Array.isArray(body.items) ? body.items : [];
 
@@ -63,6 +65,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 
   const confirm = sqlite.transaction(() => {
+    // Classification carried from the review form onto the resolved store.
+    // Only applied when the client sent the field (so blank forms never wipe
+    // an existing store's channel/category).
+    const channel = 'storeChannel' in body ? coerceChannel(storeChannel) : undefined;
+    const category = 'storeCategory' in body ? coerceCategory(storeCategory) : undefined;
+    const storePatch: { channel?: 'physical' | 'online' | null; category?: string | null } = {};
+    if (channel !== undefined) storePatch.channel = channel;
+    if (category !== undefined) storePatch.category = category;
+
     // Resolve store: existing id, or create by name
     let resolvedStoreId: number | null = null;
     if (typeof storeId === 'number') {
@@ -72,7 +83,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const existing = db.select().from(stores).where(eq(stores.name, name)).get();
       resolvedStoreId = existing
         ? existing.id
-        : db.insert(stores).values({ name }).returning().get().id;
+        : db.insert(stores).values({ name, ...storePatch }).returning().get().id;
+    }
+
+    // Keep the store's channel/category in sync with the review form.
+    if (resolvedStoreId != null && Object.keys(storePatch).length > 0) {
+      db.update(stores).set(storePatch).where(eq(stores.id, resolvedStoreId)).run();
     }
 
     // Decay wrong auto-links before the parse-time items are replaced
@@ -233,7 +249,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .orderBy(asc(receiptItems.lineNo))
     .all();
 
-  return NextResponse.json({ ...receipt, storeName: store?.name ?? null, items });
+  return NextResponse.json({
+    ...receipt,
+    storeName: store?.name ?? null,
+    storeChannel: store?.channel ?? null,
+    storeCategory: store?.category ?? null,
+    items,
+  });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {

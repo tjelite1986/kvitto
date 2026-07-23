@@ -16,6 +16,11 @@ export const stores = sqliteTable('stores', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
   city: text('city'),
+  // Whether purchases at this store are made in a physical shop or online.
+  channel: text('channel', { enum: ['physical', 'online'] }),
+  // Broad classification slug (groceries, electronics, gambling, crypto, ...).
+  // See lib/store-categories.ts for the full list.
+  category: text('category'),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 

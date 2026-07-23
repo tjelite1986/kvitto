@@ -4,11 +4,19 @@
 // automatically when a receipt from a new store is confirmed.
 
 import { useEffect, useState } from 'react';
+import {
+  STORE_CHANNELS,
+  STORE_CATEGORIES,
+  channelLabel,
+  categoryLabel,
+} from '@/lib/store-categories';
 
 interface StoreEntry {
   id: number;
   name: string;
   city: string | null;
+  channel: string | null;
+  category: string | null;
   receipts: number;
   fingerprints: number;
   keywords: number;
@@ -29,6 +37,8 @@ export default function StoresPage() {
   const [createError, setCreateError] = useState('');
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
+  const [channel, setChannel] = useState('');
+  const [category, setCategory] = useState('');
   // Learned keyword rules (expand a store row to see/manage them).
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [keywords, setKeywords] = useState<KeywordRow[]>([]);
@@ -50,18 +60,37 @@ export default function StoresPage() {
     const res = await fetch('/api/stores', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), city: city.trim() || null }),
+      body: JSON.stringify({
+        name: name.trim(),
+        city: city.trim() || null,
+        channel: channel || null,
+        category: category || null,
+      }),
     });
     setCreating(false);
     if (res.ok) {
       setName('');
       setCity('');
+      setChannel('');
+      setCategory('');
       setShowCreate(false);
       setRefresh((n) => n + 1);
     } else {
       const data = await res.json().catch(() => ({}));
       setCreateError(data.error || 'Could not create the store.');
     }
+  }
+
+  // Persist a channel/category change for an existing store, optimistically.
+  async function updateStore(storeId: number, patch: { channel?: string | null; category?: string | null }) {
+    setStoresList((prev) =>
+      prev.map((s) => (s.id === storeId ? { ...s, ...patch } : s))
+    );
+    await fetch(`/api/stores/${storeId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).catch(() => {});
   }
 
   async function toggleExpand(storeId: number) {
@@ -142,6 +171,32 @@ export default function StoresPage() {
                 className={fieldClass}
               />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Purchase</label>
+              <select
+                value={channel}
+                onChange={(e) => setChannel(e.target.value)}
+                className={fieldClass}
+              >
+                <option value="">—</option>
+                {STORE_CHANNELS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className={fieldClass}
+              >
+                <option value="">—</option>
+                {STORE_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
           {createError && <p className="text-sm text-red-600">{createError}</p>}
           <div className="flex gap-2">
@@ -187,7 +242,19 @@ export default function StoresPage() {
                     </svg>
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{store.name}</p>
-                      {store.city && <p className="text-xs text-gray-400">{store.city}</p>}
+                      <p className="text-xs text-gray-400 flex flex-wrap items-center gap-1.5">
+                        {store.city && <span>{store.city}</span>}
+                        {store.channel && (
+                          <span className="inline-block bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">
+                            {channelLabel(store.channel)}
+                          </span>
+                        )}
+                        {store.category && (
+                          <span className="inline-block bg-indigo-50 text-indigo-700 rounded-full px-2 py-0.5">
+                            {categoryLabel(store.category)}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 shrink-0">
@@ -208,6 +275,34 @@ export default function StoresPage() {
 
                 {expandedId === store.id && (
                   <div className="px-4 pb-4 pt-1 bg-gray-50/50">
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Purchase</label>
+                        <select
+                          value={store.channel ?? ''}
+                          onChange={(e) => updateStore(store.id, { channel: e.target.value || null })}
+                          className={fieldClass}
+                        >
+                          <option value="">—</option>
+                          {STORE_CHANNELS.map((c) => (
+                            <option key={c.value} value={c.value}>{c.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                        <select
+                          value={store.category ?? ''}
+                          onChange={(e) => updateStore(store.id, { category: e.target.value || null })}
+                          className={fieldClass}
+                        >
+                          <option value="">—</option>
+                          {STORE_CATEGORIES.map((c) => (
+                            <option key={c.value} value={c.value}>{c.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                     <p className="text-xs font-medium text-gray-500 mb-2">
                       Learned keyword rules
                       <span className="font-normal text-gray-400">

@@ -148,4 +148,8 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   // v8: receipt-level charges — delivery fee + service fee (added to total)
   addColumnIfMissing(sqlite, 'receipts', 'delivery_fee_ore INTEGER DEFAULT 0');
   addColumnIfMissing(sqlite, 'receipts', 'service_fee_ore INTEGER DEFAULT 0');
+
+  // v9: store classification — channel (physical/online) + category slug
+  addColumnIfMissing(sqlite, 'stores', 'channel TEXT');
+  addColumnIfMissing(sqlite, 'stores', 'category TEXT');
 }

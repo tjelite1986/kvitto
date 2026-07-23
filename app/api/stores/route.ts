@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions, sessionUserId } from '@/lib/auth';
 import { db, sqlite } from '@/lib/db';
 import { stores } from '@/lib/db/schema';
+import { coerceChannel, coerceCategory } from '@/lib/store-categories';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ export async function GET() {
 
   const rows = sqlite
     .prepare(
-      `SELECT s.id, s.name, s.city,
+      `SELECT s.id, s.name, s.city, s.channel, s.category,
               (SELECT COUNT(*) FROM store_fingerprints f WHERE f.store_id = s.id) AS fingerprints,
               (SELECT COUNT(*) FROM store_keywords k WHERE k.store_id = s.id) AS keywords,
               (SELECT COUNT(*) FROM receipts r WHERE r.store_id = s.id AND r.status = 'confirmed') AS receipts,
@@ -28,6 +29,8 @@ export async function GET() {
     id: number;
     name: string;
     city: string | null;
+    channel: string | null;
+    category: string | null;
     fingerprints: number;
     keywords: number;
     receipts: number;
@@ -47,7 +50,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { name, city } = await req.json();
+  const { name, city, channel, category } = await req.json();
   if (!name || typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'Store name is required' }, { status: 400 });
   }
@@ -58,6 +61,8 @@ export async function POST(req: NextRequest) {
       .values({
         name: name.trim(),
         city: typeof city === 'string' && city.trim() ? city.trim() : null,
+        channel: coerceChannel(channel),
+        category: coerceCategory(category),
       })
       .returning()
       .get();
