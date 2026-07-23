@@ -181,6 +181,32 @@ describe('parseLocally — pant refund (PANTRETUR)', () => {
   });
 });
 
+describe('parseLocally — delivery & service fees', () => {
+  const DELIVERY_LINES = [
+    'MATKASSE ONLINE',
+    'Kvitto 2026-07-20 14:00',
+    'MJOLK 1,5L 15,00',
+    'BROD 25,00',
+    'Utkörningsavgift 49,00',
+    'Serviceavgift 20,00',
+    'TOTALT 109,00',
+  ];
+  const { parsed, checksumOk } = parseLocally(ocrFromLines(DELIVERY_LINES));
+
+  it('captures fees as receipt-level charges, not items', () => {
+    expect(parsed.delivery_fee_ore).toBe(4900);
+    expect(parsed.service_fee_ore).toBe(2000);
+    expect(parsed.items.some((i) => /AVGIFT|SERVICE|UTK/i.test(i.name))).toBe(false);
+    expect(parsed.items).toHaveLength(2);
+  });
+
+  it('passes the checksum once fees are added to the item sum', () => {
+    // 15,00 + 25,00 + 49,00 delivery + 20,00 service = 109,00
+    expect(parsed.total_ore).toBe(10900);
+    expect(checksumOk).toBe(true);
+  });
+});
+
 describe('parseLocally — receipt number', () => {
   it('extracts a labelled receipt number (Kvittonr)', () => {
     const lines = ['Hemköp Torpa', 'Kvittonr: 4711', 'Kvitto 2026-07-05 09:55', 'MJOLK 12,00', 'TOTALT 12,00'];

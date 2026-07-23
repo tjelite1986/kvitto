@@ -53,6 +53,11 @@ export const receipts = sqliteTable('receipts', {
   // Receipt/invoice number as printed. Labelled differently per chain
   // (Kvittonr, Bong, Fakturanr, Invoice/Receipt no) — stored verbatim.
   receiptNumber: text('receipt_number'),
+  // Receipt-level charges (home delivery / online grocery): delivery fee
+  // (utkörning/leverans/frakt) and service fee (serviceavgift/plockavgift).
+  // Positive öre, ADDED to the item sum; never their own item rows.
+  deliveryFeeOre: integer('delivery_fee_ore').default(0),
+  serviceFeeOre: integer('service_fee_ore').default(0),
   imagePath: text('image_path').notNull(), // directory under data/receipts, relative to data dir
   originalFilename: text('original_filename'), // name of the uploaded file, e.g. "Kvitto-1.pdf"
   imageWidth: integer('image_width'),

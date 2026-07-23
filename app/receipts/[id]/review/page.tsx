@@ -77,6 +77,8 @@ interface ReceiptDetail {
   receiptNumber: string | null;
   totalOre: number | null;
   pantReturnOre: number | null;
+  deliveryFeeOre: number | null;
+  serviceFeeOre: number | null;
   errorMessage: string | null;
   imageWidth: number | null;
   imageHeight: number | null;
@@ -143,6 +145,8 @@ export default function ReviewPage() {
   const [purchaseTime, setPurchaseTime] = useState('');
   const [totalKr, setTotalKr] = useState('');
   const [pantReturnKr, setPantReturnKr] = useState('');
+  const [deliveryFeeKr, setDeliveryFeeKr] = useState('');
+  const [serviceFeeKr, setServiceFeeKr] = useState('');
   const [receiptNumber, setReceiptNumber] = useState('');
   const [phase, setPhase] = useState<'loading' | 'choice' | 'parsing' | 'review' | 'saving' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -159,6 +163,8 @@ export default function ReviewPage() {
     setPurchaseTime(data.purchaseTime ?? '');
     setTotalKr(oreToInput(data.totalOre));
     setPantReturnKr(data.pantReturnOre ? oreToInput(data.pantReturnOre) : '');
+    setDeliveryFeeKr(data.deliveryFeeOre ? oreToInput(data.deliveryFeeOre) : '');
+    setServiceFeeKr(data.serviceFeeOre ? oreToInput(data.serviceFeeOre) : '');
     setReceiptNumber(data.receiptNumber ?? '');
   }, []);
 
@@ -298,6 +304,8 @@ export default function ReviewPage() {
         purchaseTime: purchaseTime || null,
         totalOre: inputToOre(totalKr),
         pantReturnOre: inputToOre(pantReturnKr) ?? 0,
+        deliveryFeeOre: inputToOre(deliveryFeeKr) ?? 0,
+        serviceFeeOre: inputToOre(serviceFeeKr) ?? 0,
         receiptNumber: receiptNumber.trim() || null,
         items: items.map(toStoredItem),
       }),
@@ -327,7 +335,9 @@ export default function ReviewPage() {
   }, 0);
   const enteredTotal = inputToOre(totalKr);
   const pantReturnOre = inputToOre(pantReturnKr) ?? 0;
-  const netSum = computedSum - pantReturnOre;
+  const deliveryFeeOre = inputToOre(deliveryFeeKr) ?? 0;
+  const serviceFeeOre = inputToOre(serviceFeeKr) ?? 0;
+  const netSum = computedSum + deliveryFeeOre + serviceFeeOre - pantReturnOre;
   const sumMatches = enteredTotal == null || Math.abs(netSum - enteredTotal) <= 1;
   const totalSaved = items.reduce(
     (sum, item) =>
@@ -514,6 +524,26 @@ export default function ReviewPage() {
                   <input
                     value={pantReturnKr}
                     onChange={(e) => setPantReturnKr(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Delivery fee (kr)</label>
+                  <input
+                    value={deliveryFeeKr}
+                    onChange={(e) => setDeliveryFeeKr(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Service fee (kr)</label>
+                  <input
+                    value={serviceFeeKr}
+                    onChange={(e) => setServiceFeeKr(e.target.value)}
                     inputMode="decimal"
                     placeholder="0"
                     className={inputClass}

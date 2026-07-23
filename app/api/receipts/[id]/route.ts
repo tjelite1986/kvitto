@@ -43,7 +43,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (!receipt) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const body = await req.json();
-  const { storeId, storeName, purchaseDate, purchaseTime, totalOre, pantReturnOre, receiptNumber } = body;
+  const {
+    storeId, storeName, purchaseDate, purchaseTime, totalOre,
+    pantReturnOre, receiptNumber, deliveryFeeOre, serviceFeeOre,
+  } = body;
   const items: ConfirmItem[] = Array.isArray(body.items) ? body.items : [];
 
   if (items.length === 0) {
@@ -169,6 +172,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         receiptNumber: typeof receiptNumber === 'string' && receiptNumber.trim() ? receiptNumber.trim() : null,
         totalOre: typeof totalOre === 'number' ? totalOre : null,
         pantReturnOre: typeof pantReturnOre === 'number' ? pantReturnOre : 0,
+        deliveryFeeOre: typeof deliveryFeeOre === 'number' ? deliveryFeeOre : 0,
+        serviceFeeOre: typeof serviceFeeOre === 'number' ? serviceFeeOre : 0,
         status: 'confirmed',
         confirmedAt: new Date().toISOString(),
       })

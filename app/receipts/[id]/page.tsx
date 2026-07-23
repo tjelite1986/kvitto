@@ -35,6 +35,8 @@ interface ReceiptDetail {
   receiptNumber: string | null;
   totalOre: number | null;
   pantReturnOre: number | null;
+  deliveryFeeOre: number | null;
+  serviceFeeOre: number | null;
   imageWidth: number | null;
   imageHeight: number | null;
   items: ItemRow[];
@@ -193,6 +195,18 @@ export default function ReceiptDetailPage() {
               </span>
             </div>
           ))}
+          {receipt.deliveryFeeOre != null && receipt.deliveryFeeOre > 0 && (
+            <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500">
+              <span>Delivery fee</span>
+              <span>{formatKr(receipt.deliveryFeeOre)}</span>
+            </div>
+          )}
+          {receipt.serviceFeeOre != null && receipt.serviceFeeOre > 0 && (
+            <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500">
+              <span>Service fee</span>
+              <span>{formatKr(receipt.serviceFeeOre)}</span>
+            </div>
+          )}
           {receipt.pantReturnOre != null && receipt.pantReturnOre > 0 && (
             <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500">
               <span>Pant refund</span>

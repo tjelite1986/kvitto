@@ -121,9 +121,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return sum + effective - item.discount_ore + (item.pant_ore || 0);
     }, 0);
     const pantReturnOre = parsed.pant_return_ore || 0;
+    const deliveryFeeOre = parsed.delivery_fee_ore || 0;
+    const serviceFeeOre = parsed.service_fee_ore || 0;
     const totalMismatch =
       parsed.total_ore != null &&
-      Math.abs(computedSum - pantReturnOre - parsed.total_ore) > 1;
+      Math.abs(
+        computedSum + deliveryFeeOre + serviceFeeOre - pantReturnOre - parsed.total_ore
+      ) > 1;
 
     // Step 5: map items to OCR line bounding boxes
     const lineTexts = ocr.lines.map((l) => l.text);
@@ -194,6 +198,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         receiptNumber: parsed.receipt_number ?? null,
         totalOre: parsed.total_ore,
         pantReturnOre,
+        deliveryFeeOre,
+        serviceFeeOre,
         claudeRaw: JSON.stringify({ parsed, totalMismatch, detection, parser }),
         status: 'pending_review',
       })

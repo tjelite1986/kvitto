@@ -135,4 +135,8 @@ export function bootstrapSchema(sqlite: Database.Database): void {
 
   // v7: receipt/invoice number as printed (Kvittonr, Bong, Fakturanr, ...)
   addColumnIfMissing(sqlite, 'receipts', 'receipt_number TEXT');
+
+  // v8: receipt-level charges — delivery fee + service fee (added to total)
+  addColumnIfMissing(sqlite, 'receipts', 'delivery_fee_ore INTEGER DEFAULT 0');
+  addColumnIfMissing(sqlite, 'receipts', 'service_fee_ore INTEGER DEFAULT 0');
 }

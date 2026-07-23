@@ -20,6 +20,10 @@ const PANT_RE = /\bPANT\b/i;
 // distinct from the PANT surcharge you pay when buying. Matched before PANT so
 // "PANTRETUR" never folds into an item's pant_ore.
 const PANTRETUR_RE = /PANTRETUR|RETURPANT|PANT[\s.-]*RETUR/i;
+// Receipt-level charges on home-delivery / online-grocery receipts. Added to
+// the total, never items. Checked before the item logic.
+const DELIVERY_FEE_RE = /\b(UTK[ÖO]RNING|LEVERANSAVGIFT|HEMK[ÖO]RNING|HEMLEVERANS|FRAKT)\w*/i;
+const SERVICE_FEE_RE = /\b(SERVICEAVGIFT|SERVICEAVG|PLOCKAVGIFT|EXPEDITIONSAVGIFT|SERVICE)\w*/i;
 // Receipt/invoice number labels. Value must start with a digit and follow an
 // explicit number label — the bare "Kvitto <date>" header must not match.
 const RECEIPT_NO_RE =
@@ -84,6 +88,8 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
   const items: ParsedItem[] = [];
   let totalOre: number | null = null;
   let pantReturnOre = 0;
+  let deliveryFeeOre = 0;
+  let serviceFeeOre = 0;
   let pendingName: { name: string; line: string } | null = null;
   let itemsEnded = false;
 
@@ -112,6 +118,20 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
     // per-item surcharge. Must be checked before PANT and the discount rule.
     if (PANTRETUR_RE.test(text)) {
       if (money) pantReturnOre += Math.abs(money.ore);
+      pendingName = null;
+      continue;
+    }
+
+    // Delivery / service fees: receipt-level charges (home delivery / online
+    // grocery), added to the total, never items. Only consume the line when it
+    // actually carries a price, so addresses/phone lines fall through normally.
+    if (money && DELIVERY_FEE_RE.test(text)) {
+      deliveryFeeOre += Math.abs(money.ore);
+      pendingName = null;
+      continue;
+    }
+    if (money && SERVICE_FEE_RE.test(text)) {
+      serviceFeeOre += Math.abs(money.ore);
       pendingName = null;
       continue;
     }
@@ -275,7 +295,7 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
   const checksumOk =
     totalOre != null &&
     cleaned.length > 0 &&
-    Math.abs(computedSum - pantReturnOre - totalOre) <= 1;
+    Math.abs(computedSum + deliveryFeeOre + serviceFeeOre - pantReturnOre - totalOre) <= 1;
 
   return {
     parsed: {
@@ -285,6 +305,8 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
       receipt_number: receiptNumber,
       total_ore: totalOre,
       pant_return_ore: pantReturnOre,
+      delivery_fee_ore: deliveryFeeOre,
+      service_fee_ore: serviceFeeOre,
       items: cleaned,
     },
     checksumOk,
