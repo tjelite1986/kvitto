@@ -6,6 +6,7 @@ import Link from 'next/link';
 import PriceHistoryChart, { type PriceSeries } from '@/components/charts/PriceHistoryChart';
 import { formatKr } from '@/lib/format';
 import { AMOUNT_UNITS, comparisonPriceOre, formatAmount } from '@/lib/units';
+import ProductCategorySelect from '@/components/ProductCategorySelect';
 
 interface Observation {
   storeId: number;
@@ -233,11 +234,9 @@ export default function ProductDetailPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
-              <input
+              <ProductCategorySelect
                 value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                placeholder="e.g. Dryck"
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                onChange={(category) => setForm((f) => ({ ...f, category }))}
               />
             </div>
             <div>

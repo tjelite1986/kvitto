@@ -133,6 +133,16 @@ export const productAliases = sqliteTable('product_aliases', {
   index('product_aliases_alias_idx').on(t.aliasText),
 ]);
 
+// Managed list of product categories (defaults seeded from
+// lib/product-categories.ts, user-extensible). products.category stores the
+// chosen name as free text; deleting a category here never touches products.
+export const productCategories = sqliteTable('product_categories', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 // User-taught rules: a keyword (e.g. "foodora") that identifies a store. When
 // it appears in a receipt's OCR text, that store is auto-detected. Learned by
 // marking the store text on the receipt during review.

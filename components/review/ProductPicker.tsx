@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AMOUNT_UNITS, parseAmountFromText } from '@/lib/units';
+import ProductCategorySelect from '@/components/ProductCategorySelect';
 
 interface ProductOption {
   id: number;
@@ -243,10 +244,9 @@ export default function ProductPicker({
                     placeholder="Brand"
                     className={fieldClass}
                   />
-                  <input
+                  <ProductCategorySelect
                     value={form.category}
-                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                    placeholder="Category"
+                    onChange={(category) => setForm((f) => ({ ...f, category }))}
                     className={fieldClass}
                   />
                 </div>

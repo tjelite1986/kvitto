@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { DEFAULT_PRODUCT_CATEGORIES } from '../product-categories';
 
 // Idempotent schema bootstrap. Runs at app startup (lib/db/index.ts) so a
 // fresh container/volume works without a separate migration step, and from
@@ -115,6 +116,13 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   CREATE INDEX IF NOT EXISTS receipt_items_receipt_idx ON receipt_items(receipt_id);
   CREATE INDEX IF NOT EXISTS receipt_items_product_idx ON receipt_items(product_id);
 
+  CREATE TABLE IF NOT EXISTS product_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS store_keywords (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
@@ -152,4 +160,16 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   // v9: store classification — channel (physical/online) + category slug
   addColumnIfMissing(sqlite, 'stores', 'channel TEXT');
   addColumnIfMissing(sqlite, 'stores', 'category TEXT');
+
+  // v10: seed the managed product-category list once, only when empty (the
+  // list is user-extensible afterwards, so never re-seed / overwrite edits).
+  const catCount = (
+    sqlite.prepare('SELECT COUNT(*) AS n FROM product_categories').get() as { n: number }
+  ).n;
+  if (catCount === 0) {
+    const insert = sqlite.prepare(
+      'INSERT OR IGNORE INTO product_categories (name, sort_order) VALUES (?, ?)'
+    );
+    DEFAULT_PRODUCT_CATEGORIES.forEach((name, i) => insert.run(name, i));
+  }
 }
