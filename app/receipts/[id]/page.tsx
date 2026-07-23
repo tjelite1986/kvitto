@@ -32,6 +32,7 @@ interface ReceiptDetail {
   originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
+  receiptNumber: string | null;
   totalOre: number | null;
   pantReturnOre: number | null;
   imageWidth: number | null;
@@ -79,6 +80,9 @@ export default function ReceiptDetailPage() {
               <span className="ml-2 text-xs text-gray-300">{receipt.originalFilename}</span>
             )}
           </p>
+          {receipt.receiptNumber && (
+            <p className="text-xs text-gray-400 mt-0.5">Receipt no. {receipt.receiptNumber}</p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {statusBadge(receipt.status)}

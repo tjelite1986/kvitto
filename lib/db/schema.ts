@@ -50,6 +50,9 @@ export const receipts = sqliteTable('receipts', {
   // Deposit refund (PANTRETUR — returning empties for money back). Stored as a
   // positive öre amount and subtracted from the item sum; never its own item.
   pantReturnOre: integer('pant_return_ore').default(0),
+  // Receipt/invoice number as printed. Labelled differently per chain
+  // (Kvittonr, Bong, Fakturanr, Invoice/Receipt no) — stored verbatim.
+  receiptNumber: text('receipt_number'),
   imagePath: text('image_path').notNull(), // directory under data/receipts, relative to data dir
   originalFilename: text('original_filename'), // name of the uploaded file, e.g. "Kvitto-1.pdf"
   imageWidth: integer('image_width'),

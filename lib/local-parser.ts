@@ -20,6 +20,10 @@ const PANT_RE = /\bPANT\b/i;
 // distinct from the PANT surcharge you pay when buying. Matched before PANT so
 // "PANTRETUR" never folds into an item's pant_ore.
 const PANTRETUR_RE = /PANTRETUR|RETURPANT|PANT[\s.-]*RETUR/i;
+// Receipt/invoice number labels. Value must start with a digit and follow an
+// explicit number label — the bare "Kvitto <date>" header must not match.
+const RECEIPT_NO_RE =
+  /\b(?:kvitto\s*\/?\s*faktura\s*(?:nr|nummer)|kvitto[\s-]*(?:nr|nummer)|kvittonr|bong(?:[\s-]*nr)?|faktura[\s-]*(?:nr|nummer)|invoice\s*(?:no\.?|nr|number|#)?|receipt\s*(?:no\.?|nr|number|#)?)\b[\s:.#-]*([0-9][0-9A-Za-z/-]{1,24})/i;
 const DISCOUNT_RE = /\b(RABATT|PRISNEDSATT|PRISNEDS|S[ÄA]NKT|EXTRAPRIS|KAMPANJ)\b/i;
 // OCR often reads FÖR as FOR/F0R, and sometimes inserts a space inside the
 // price ("29, 90") — all money patterns tolerate \s? around the separator.
@@ -248,6 +252,18 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
     ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`
     : null;
 
+  // Receipt/invoice number — labelled differently per chain. Require an explicit
+  // number label (so the bare "Kvitto <date>" header isn't grabbed) and a value
+  // that starts with a digit. Best-effort: the user can fix it in review.
+  let receiptNumber: string | null = null;
+  for (const l of lines) {
+    const m = l.match(RECEIPT_NO_RE);
+    if (m) {
+      receiptNumber = m[1].replace(/[-.:]+$/, '');
+      break;
+    }
+  }
+
   const computedSum = cleaned.reduce((sum, item) => {
     const effective =
       item.offer_qty && item.offer_total_ore != null
@@ -266,6 +282,7 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
       store_name: null,
       purchase_date: purchaseDate,
       purchase_time: purchaseTime,
+      receipt_number: receiptNumber,
       total_ore: totalOre,
       pant_return_ore: pantReturnOre,
       items: cleaned,

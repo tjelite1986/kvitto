@@ -191,6 +191,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         storeId: detection?.storeId ?? null,
         purchaseDate: parsed.purchase_date,
         purchaseTime: parsed.purchase_time,
+        receiptNumber: parsed.receipt_number ?? null,
         totalOre: parsed.total_ore,
         pantReturnOre,
         claudeRaw: JSON.stringify({ parsed, totalMismatch, detection, parser }),

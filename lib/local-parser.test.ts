@@ -181,6 +181,38 @@ describe('parseLocally — pant refund (PANTRETUR)', () => {
   });
 });
 
+describe('parseLocally — receipt number', () => {
+  it('extracts a labelled receipt number (Kvittonr)', () => {
+    const lines = ['Hemköp Torpa', 'Kvittonr: 4711', 'Kvitto 2026-07-05 09:55', 'MJOLK 12,00', 'TOTALT 12,00'];
+    const { parsed } = parseLocally(ocrFromLines(lines));
+    expect(parsed.receipt_number).toBe('4711');
+  });
+
+  it('extracts an invoice number (English label)', () => {
+    const lines = ['STORE AB', 'Invoice no 000123', 'MILK 12,00', 'TOTAL 12,00'];
+    const { parsed } = parseLocally(ocrFromLines(lines));
+    expect(parsed.receipt_number).toBe('000123');
+  });
+
+  it('extracts a Bong number', () => {
+    const lines = ['ICA', 'Bong 5582', 'BROD 20,00', 'TOTALT 20,00'];
+    const { parsed } = parseLocally(ocrFromLines(lines));
+    expect(parsed.receipt_number).toBe('5582');
+  });
+
+  it('does not mistake the bare "Kvitto <date>" header for a number', () => {
+    // ICA_LINES has "Kvitto 2026-07-01 17:42" but no explicit number label
+    const { parsed } = parseLocally(ocrFromLines(ICA_LINES));
+    expect(parsed.receipt_number).toBeNull();
+  });
+
+  it('does not grab the org number', () => {
+    const lines = ['STORE', 'Org.nr: 556000-1234', 'MILK 12,00', 'TOTALT 12,00'];
+    const { parsed } = parseLocally(ocrFromLines(lines));
+    expect(parsed.receipt_number).toBeNull();
+  });
+});
+
 describe('parseLocally — checksum failure', () => {
   it('fails the checksum when a line is garbled', () => {
     const broken = ICA_LINES.filter((l) => !l.includes('POLARBROD'));

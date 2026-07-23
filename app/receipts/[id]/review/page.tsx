@@ -74,6 +74,7 @@ interface ReceiptDetail {
   originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
+  receiptNumber: string | null;
   totalOre: number | null;
   pantReturnOre: number | null;
   errorMessage: string | null;
@@ -142,6 +143,7 @@ export default function ReviewPage() {
   const [purchaseTime, setPurchaseTime] = useState('');
   const [totalKr, setTotalKr] = useState('');
   const [pantReturnKr, setPantReturnKr] = useState('');
+  const [receiptNumber, setReceiptNumber] = useState('');
   const [phase, setPhase] = useState<'loading' | 'choice' | 'parsing' | 'review' | 'saving' | 'error'>('loading');
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -157,6 +159,7 @@ export default function ReviewPage() {
     setPurchaseTime(data.purchaseTime ?? '');
     setTotalKr(oreToInput(data.totalOre));
     setPantReturnKr(data.pantReturnOre ? oreToInput(data.pantReturnOre) : '');
+    setReceiptNumber(data.receiptNumber ?? '');
   }, []);
 
   const triggerParse = useCallback(
@@ -295,6 +298,7 @@ export default function ReviewPage() {
         purchaseTime: purchaseTime || null,
         totalOre: inputToOre(totalKr),
         pantReturnOre: inputToOre(pantReturnKr) ?? 0,
+        receiptNumber: receiptNumber.trim() || null,
         items: items.map(toStoredItem),
       }),
     });
@@ -512,6 +516,15 @@ export default function ReviewPage() {
                     onChange={(e) => setPantReturnKr(e.target.value)}
                     inputMode="decimal"
                     placeholder="0"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Receipt no.</label>
+                  <input
+                    value={receiptNumber}
+                    onChange={(e) => setReceiptNumber(e.target.value)}
+                    placeholder="Kvittonr / Invoice no."
                     className={inputClass}
                   />
                 </div>

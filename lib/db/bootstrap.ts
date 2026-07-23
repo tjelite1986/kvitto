@@ -132,4 +132,7 @@ export function bootstrapSchema(sqlite: Database.Database): void {
 
   // v6: deposit refund (PANTRETUR) as a receipt-level credit, öre
   addColumnIfMissing(sqlite, 'receipts', 'pant_return_ore INTEGER DEFAULT 0');
+
+  // v7: receipt/invoice number as printed (Kvittonr, Bong, Fakturanr, ...)
+  addColumnIfMissing(sqlite, 'receipts', 'receipt_number TEXT');
 }

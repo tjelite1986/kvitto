@@ -34,6 +34,8 @@ export interface ParsedReceipt {
   store_name: string | null;
   purchase_date: string | null;
   purchase_time: string | null;
+  // Receipt/invoice number as printed (Kvittonr, Bong, Fakturanr, Invoice no).
+  receipt_number: string | null;
   total_ore: number | null;
   // Deposit refund (PANTRETUR — returning empties for money back), positive öre.
   // A receipt-level credit subtracted from the item sum, never its own item.
@@ -55,6 +57,10 @@ const RECEIPT_SCHEMA = {
     purchase_time: {
       type: ['string', 'null'],
       description: 'Purchase time of day in 24h HH:MM format (from the receipt datetime line), null if not found',
+    },
+    receipt_number: {
+      type: ['string', 'null'],
+      description: 'Receipt or invoice number as printed, verbatim (digits/letters, keep leading zeros). Labelled differently per chain: "Kvittonr", "Kvitto nr", "Kvitto/Faktura nr", "Bong", "Bongnr", "Fakturanr", "Invoice no", "Receipt no". NOT the date/time, org number, store number, cashier/till number, card number or loyalty number. null if not found.',
     },
     total_ore: {
       type: ['integer', 'null'],
@@ -131,7 +137,7 @@ const RECEIPT_SCHEMA = {
       },
     },
   },
-  required: ['store_name', 'purchase_date', 'purchase_time', 'total_ore', 'pant_return_ore', 'items'],
+  required: ['store_name', 'purchase_date', 'purchase_time', 'receipt_number', 'total_ore', 'pant_return_ore', 'items'],
   additionalProperties: false,
 } as const;
 
@@ -150,6 +156,7 @@ Swedish receipt conventions:
 - Do NOT create items for: PANT lines, VAT summaries (MOMS), subtotals, payment lines (KORT, KONTANT, Mastercard), change (VÄXEL), loyalty points, opening hours, addresses, or "Att betala".
 - Sanity: sum over items of (offer_total_ore if set, else line_total_ore) - discount_ore + pant_ore, then minus pant_return_ore, should equal the receipt total.
 - The grand total is usually labelled "TOTALT", "ATT BETALA", "SUMMA" or "Total".
+- The receipt/invoice number goes in receipt_number: it is labelled differently per chain ("Kvittonr", "Kvitto nr", "Kvitto/Faktura nr", "Bong", "Bongnr", "Fakturanr", "Invoice no", "Receipt no"). Copy the value verbatim (keep leading zeros). Never confuse it with the date/time, org number (Org.nr), store/till number, cashier id, card number or loyalty/member number.
 - The OCR text may contain recognition errors; use the image to resolve them. In source_lines, quote the OCR lines VERBATIM as given (even if misrecognized) so they can be located later.
 - purchase_date: receipts print dates like "2026-07-01", "26-07-01" or "01.07.26"; output YYYY-MM-DD. The time usually follows the date ("2026-07-01 17:42"); output it as purchase_time in 24h HH:MM.
 - Product metadata: for each item also suggest brand, category, amount_value and amount_unit when identifiable from the printed text. brand is the manufacturer/brand ("COCA-COLA ZERO 1,5L" → "Coca-Cola"); use null rather than guessing. amount_value/amount_unit is the PACKAGE size printed in the name ("1,5L" → 1.5 + "l", "330ML" → 330 + "ml", "500G" → 500 + "g") — never the purchase quantity ("4 st" is qty, not a package size). Pick category from the allowed list, null if unclear.`;
