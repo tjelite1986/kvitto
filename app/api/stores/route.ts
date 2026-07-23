@@ -16,6 +16,7 @@ export async function GET() {
     .prepare(
       `SELECT s.id, s.name, s.city,
               (SELECT COUNT(*) FROM store_fingerprints f WHERE f.store_id = s.id) AS fingerprints,
+              (SELECT COUNT(*) FROM store_keywords k WHERE k.store_id = s.id) AS keywords,
               (SELECT COUNT(*) FROM receipts r WHERE r.store_id = s.id AND r.status = 'confirmed') AS receipts,
               COALESCE(p.layout_hints, '') AS layoutHints,
               COALESCE(p.examples, '[]') AS examples
@@ -28,6 +29,7 @@ export async function GET() {
     name: string;
     city: string | null;
     fingerprints: number;
+    keywords: number;
     receipts: number;
     layoutHints: string;
     examples: string;
