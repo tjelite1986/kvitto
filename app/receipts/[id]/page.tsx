@@ -33,6 +33,7 @@ interface ReceiptDetail {
   purchaseDate: string | null;
   purchaseTime: string | null;
   totalOre: number | null;
+  pantReturnOre: number | null;
   imageWidth: number | null;
   imageHeight: number | null;
   items: ItemRow[];
@@ -188,6 +189,12 @@ export default function ReceiptDetailPage() {
               </span>
             </div>
           ))}
+          {receipt.pantReturnOre != null && receipt.pantReturnOre > 0 && (
+            <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500">
+              <span>Pant refund</span>
+              <span>−{formatKr(receipt.pantReturnOre)}</span>
+            </div>
+          )}
           {receipt.totalOre != null && (
             <div className="px-4 py-3 flex items-center justify-between font-semibold">
               <span>Total</span>

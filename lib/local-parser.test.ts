@@ -152,6 +152,35 @@ describe('parseLocally — OCR quirks', () => {
   });
 });
 
+describe('parseLocally — pant refund (PANTRETUR)', () => {
+  const PANTRETUR_LINES = [
+    'Hemköp Torpa, Vänersborg',
+    'Kvitto 2026-07-05 09:55',
+    'COCA-COLA ZERO 1,5L 24,90',
+    'PANT 4,00',
+    'PANTRETUR -10,00',
+    'TOTALT 18,90',
+  ];
+  const { parsed, checksumOk } = parseLocally(ocrFromLines(PANTRETUR_LINES));
+
+  it('captures the refund as a receipt-level credit, not an item', () => {
+    expect(parsed.pant_return_ore).toBe(1000);
+    expect(parsed.items.some((i) => /RETUR/i.test(i.name))).toBe(false);
+    expect(parsed.items).toHaveLength(1);
+  });
+
+  it('passes the checksum once the refund is subtracted', () => {
+    // 24,90 + 4,00 pant - 10,00 refund = 18,90
+    expect(parsed.total_ore).toBe(1890);
+    expect(checksumOk).toBe(true);
+  });
+
+  it('keeps the beverage pant surcharge separate from the refund', () => {
+    const cola = parsed.items[0];
+    expect(cola.pant_ore).toBe(400);
+  });
+});
+
 describe('parseLocally — checksum failure', () => {
   it('fails the checksum when a line is garbled', () => {
     const broken = ICA_LINES.filter((l) => !l.includes('POLARBROD'));

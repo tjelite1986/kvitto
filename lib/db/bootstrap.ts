@@ -129,4 +129,7 @@ export function bootstrapSchema(sqlite: Database.Database): void {
 
   // v5: original name of the uploaded file (e.g. "Kvitto-1.pdf")
   addColumnIfMissing(sqlite, 'receipts', 'original_filename TEXT');
+
+  // v6: deposit refund (PANTRETUR) as a receipt-level credit, öre
+  addColumnIfMissing(sqlite, 'receipts', 'pant_return_ore INTEGER DEFAULT 0');
 }

@@ -75,6 +75,7 @@ interface ReceiptDetail {
   purchaseDate: string | null;
   purchaseTime: string | null;
   totalOre: number | null;
+  pantReturnOre: number | null;
   errorMessage: string | null;
   imageWidth: number | null;
   imageHeight: number | null;
@@ -140,6 +141,7 @@ export default function ReviewPage() {
   const [purchaseDate, setPurchaseDate] = useState('');
   const [purchaseTime, setPurchaseTime] = useState('');
   const [totalKr, setTotalKr] = useState('');
+  const [pantReturnKr, setPantReturnKr] = useState('');
   const [phase, setPhase] = useState<'loading' | 'choice' | 'parsing' | 'review' | 'saving' | 'error'>('loading');
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -154,6 +156,7 @@ export default function ReviewPage() {
     setPurchaseDate(data.purchaseDate ?? '');
     setPurchaseTime(data.purchaseTime ?? '');
     setTotalKr(oreToInput(data.totalOre));
+    setPantReturnKr(data.pantReturnOre ? oreToInput(data.pantReturnOre) : '');
   }, []);
 
   const triggerParse = useCallback(
@@ -291,6 +294,7 @@ export default function ReviewPage() {
         purchaseDate: purchaseDate || null,
         purchaseTime: purchaseTime || null,
         totalOre: inputToOre(totalKr),
+        pantReturnOre: inputToOre(pantReturnKr) ?? 0,
         items: items.map(toStoredItem),
       }),
     });
@@ -318,7 +322,9 @@ export default function ReviewPage() {
     return sum + effective - (item.discountOre || 0) + (item.pantOre || 0);
   }, 0);
   const enteredTotal = inputToOre(totalKr);
-  const sumMatches = enteredTotal == null || Math.abs(computedSum - enteredTotal) <= 1;
+  const pantReturnOre = inputToOre(pantReturnKr) ?? 0;
+  const netSum = computedSum - pantReturnOre;
+  const sumMatches = enteredTotal == null || Math.abs(netSum - enteredTotal) <= 1;
   const totalSaved = items.reduce(
     (sum, item) =>
       sum +
@@ -499,6 +505,16 @@ export default function ReviewPage() {
                     className={inputClass}
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Pant refund (kr)</label>
+                  <input
+                    value={pantReturnKr}
+                    onChange={(e) => setPantReturnKr(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className={inputClass}
+                  />
+                </div>
               </div>
 
               <div className="bg-white rounded-lg shadow divide-y divide-gray-100">
@@ -671,7 +687,7 @@ export default function ReviewPage() {
                     <span
                       className={`text-sm font-medium ${sumMatches ? 'text-green-600' : 'text-red-600'}`}
                     >
-                      Sum: {formatKr(computedSum)}
+                      Sum: {formatKr(netSum)}
                       {!sumMatches && enteredTotal != null && ` (total says ${formatKr(enteredTotal)})`}
                     </span>
                   </span>

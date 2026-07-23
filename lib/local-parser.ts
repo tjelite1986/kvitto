@@ -16,6 +16,10 @@ const TOTAL_RE = /\b(TOTALT|ATT\s+BETALA|SUMMA|TOTAL)\b/i;
 const SKIP_RE =
   /\b(MOMS|KORT|KONTANT|MASTERCARD|VISA|SWISH|V[ÄA]XEL|KVITTO|ORG\.?\s?NR|TELE?F?O?N?|WWW|TACK|[ÖO]PPET|BRUTTO|NETTO|KASS[AÖO]R?|SJ[ÄA]LVSCAN|MEDLEM|BONUS|SALDO|KUND)\b/i;
 const PANT_RE = /\bPANT\b/i;
+// Deposit refund: returning empties for money back. A receipt-level credit,
+// distinct from the PANT surcharge you pay when buying. Matched before PANT so
+// "PANTRETUR" never folds into an item's pant_ore.
+const PANTRETUR_RE = /PANTRETUR|RETURPANT|PANT[\s.-]*RETUR/i;
 const DISCOUNT_RE = /\b(RABATT|PRISNEDSATT|PRISNEDS|S[ÄA]NKT|EXTRAPRIS|KAMPANJ)\b/i;
 // OCR often reads FÖR as FOR/F0R, and sometimes inserts a space inside the
 // price ("29, 90") — all money patterns tolerate \s? around the separator.
@@ -75,6 +79,7 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
   const lines = ocr.lines.map((l) => l.text);
   const items: ParsedItem[] = [];
   let totalOre: number | null = null;
+  let pantReturnOre = 0;
   let pendingName: { name: string; line: string } | null = null;
   let itemsEnded = false;
 
@@ -97,6 +102,15 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
     }
 
     if (SKIP_RE.test(text)) continue;
+
+    // PANTRETUR: deposit refund (returning empties for money back). A
+    // receipt-level credit that lowers the total — never an item, never a
+    // per-item surcharge. Must be checked before PANT and the discount rule.
+    if (PANTRETUR_RE.test(text)) {
+      if (money) pantReturnOre += Math.abs(money.ore);
+      pendingName = null;
+      continue;
+    }
 
     // PANT: surcharge on the previous item, never an item of its own
     if (PANT_RE.test(text)) {
@@ -243,7 +257,9 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
   }, 0);
 
   const checksumOk =
-    totalOre != null && cleaned.length > 0 && Math.abs(computedSum - totalOre) <= 1;
+    totalOre != null &&
+    cleaned.length > 0 &&
+    Math.abs(computedSum - pantReturnOre - totalOre) <= 1;
 
   return {
     parsed: {
@@ -251,6 +267,7 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
       purchase_date: purchaseDate,
       purchase_time: purchaseTime,
       total_ore: totalOre,
+      pant_return_ore: pantReturnOre,
       items: cleaned,
     },
     checksumOk,

@@ -120,8 +120,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           : item.line_total_ore;
       return sum + effective - item.discount_ore + (item.pant_ore || 0);
     }, 0);
+    const pantReturnOre = parsed.pant_return_ore || 0;
     const totalMismatch =
-      parsed.total_ore != null && Math.abs(computedSum - parsed.total_ore) > 1;
+      parsed.total_ore != null &&
+      Math.abs(computedSum - pantReturnOre - parsed.total_ore) > 1;
 
     // Step 5: map items to OCR line bounding boxes
     const lineTexts = ocr.lines.map((l) => l.text);
@@ -190,6 +192,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         purchaseDate: parsed.purchase_date,
         purchaseTime: parsed.purchase_time,
         totalOre: parsed.total_ore,
+        pantReturnOre,
         claudeRaw: JSON.stringify({ parsed, totalMismatch, detection, parser }),
         status: 'pending_review',
       })
