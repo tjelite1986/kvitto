@@ -17,6 +17,7 @@ import {
 } from '@/lib/learning';
 import { learnStoreKeyword } from '@/lib/store-detection';
 import { coerceChannel, coerceCategory } from '@/lib/store-categories';
+import { coerceCurrency } from '@/lib/currency';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const {
     storeId, storeName, purchaseDate, purchaseTime, totalOre,
     pantReturnOre, receiptNumber, deliveryFeeOre, serviceFeeOre, storeKeyword,
-    storeChannel, storeCategory,
+    storeChannel, storeCategory, currency,
   } = body;
   const items: ConfirmItem[] = Array.isArray(body.items) ? body.items : [];
 
@@ -199,6 +200,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       .set({
         storeId: resolvedStoreId,
         channel: channel !== undefined ? channel : receipt.channel,
+        currency: 'currency' in body ? coerceCurrency(currency) : receipt.currency,
         purchaseDate: typeof purchaseDate === 'string' ? purchaseDate : null,
         purchaseTime: typeof purchaseTime === 'string' && purchaseTime ? purchaseTime : null,
         receiptNumber: typeof receiptNumber === 'string' && receiptNumber.trim() ? receiptNumber.trim() : null,

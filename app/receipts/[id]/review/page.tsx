@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { formatKr, statusBadge } from '@/lib/format';
+import { formatMoney, statusBadge } from '@/lib/format';
+import { CURRENCIES, currencySymbol } from '@/lib/currency';
 import ReceiptImageViewer, {
   ITEM_COLORS,
   type OverlayWord,
@@ -84,6 +85,7 @@ interface ReceiptDetail {
   purchaseTime: string | null;
   receiptNumber: string | null;
   channel: string | null; // this receipt's own purchase channel
+  currency: string | null; // this receipt's currency (SEK/EUR/USD)
   storeChannel: string | null; // the store's default channel (fallback)
   storeCategory: string | null;
   totalOre: number | null;
@@ -154,6 +156,7 @@ export default function ReviewPage() {
   const [storeName, setStoreName] = useState('');
   const [storeChannel, setStoreChannel] = useState('');
   const [storeCategory, setStoreCategory] = useState('');
+  const [currency, setCurrency] = useState('SEK');
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([]);
   const [purchaseDate, setPurchaseDate] = useState('');
   const [purchaseTime, setPurchaseTime] = useState('');
@@ -179,6 +182,7 @@ export default function ReviewPage() {
     setStoreName(data.storeName ?? '');
     // Prefer this receipt's own channel; fall back to the store's default.
     setStoreChannel(data.channel ?? data.storeChannel ?? '');
+    setCurrency(data.currency ?? 'SEK');
     setStoreCategory(data.storeCategory ?? '');
     setPurchaseDate(data.purchaseDate ?? '');
     setPurchaseTime(data.purchaseTime ?? '');
@@ -364,6 +368,7 @@ export default function ReviewPage() {
         storeKeyword: storeKeyword.trim() || null,
         storeChannel: storeChannel || null,
         storeCategory: storeCategory || null,
+        currency,
         items: items.map(toStoredItem),
       }),
     });
@@ -390,6 +395,8 @@ export default function ReviewPage() {
       item.offerQty && item.offerTotalOre != null ? item.offerTotalOre : item.lineTotalOre;
     return sum + effective - (item.discountOre || 0) + (item.pantOre || 0);
   }, 0);
+  // All amounts on the review screen are in the receipt's currency.
+  const fmt = (minor: number) => formatMoney(minor, currency);
   const enteredTotal = inputToOre(totalKr);
   const pantReturnOre = inputToOre(pantReturnKr) ?? 0;
   const deliveryFeeOre = inputToOre(deliveryFeeKr) ?? 0;
@@ -618,6 +625,18 @@ export default function ReviewPage() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Currency</label>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className={inputClass}
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>
                   <input
                     type="date"
@@ -636,7 +655,7 @@ export default function ReviewPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Total (kr)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Total ({currencySymbol(currency)})</label>
                   <input
                     value={totalKr}
                     onChange={(e) => setTotalKr(e.target.value)}
@@ -645,7 +664,7 @@ export default function ReviewPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Pant refund (kr)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Pant refund ({currencySymbol(currency)})</label>
                   <input
                     value={pantReturnKr}
                     onChange={(e) => setPantReturnKr(e.target.value)}
@@ -655,7 +674,7 @@ export default function ReviewPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Delivery fee (kr)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Delivery fee ({currencySymbol(currency)})</label>
                   <input
                     value={deliveryFeeKr}
                     onChange={(e) => setDeliveryFeeKr(e.target.value)}
@@ -665,7 +684,7 @@ export default function ReviewPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Service fee (kr)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Service fee ({currencySymbol(currency)})</label>
                   <input
                     value={serviceFeeKr}
                     onChange={(e) => setServiceFeeKr(e.target.value)}
@@ -773,7 +792,7 @@ export default function ReviewPage() {
                     {item.unit === 'hg' && (
                       <p className="text-[10px] text-gray-400 pl-4">
                         Saved as {(item.qty / 10).toLocaleString('sv-SE')} kg
-                        {item.unitPriceOre != null && ` × ${formatKr(item.unitPriceOre * 10)}/kg`}
+                        {item.unitPriceOre != null && ` × ${fmt(item.unitPriceOre * 10)}/kg`}
                       </p>
                     )}
                     <div className="pl-4 flex items-center justify-between gap-2">
@@ -794,7 +813,7 @@ export default function ReviewPage() {
                             : 0);
                         return saved > 0 ? (
                           <span className="text-xs font-medium text-green-600 shrink-0">
-                            Saved {formatKr(saved)}
+                            Saved {fmt(saved)}
                           </span>
                         ) : null;
                       })()}
@@ -849,14 +868,14 @@ export default function ReviewPage() {
                   <span className="text-right">
                     {totalSaved > 0 && (
                       <span className="block text-xs text-green-600">
-                        Total saved: {formatKr(totalSaved)}
+                        Total saved: {fmt(totalSaved)}
                       </span>
                     )}
                     <span
                       className={`text-sm font-medium ${sumMatches ? 'text-green-600' : 'text-red-600'}`}
                     >
-                      Sum: {formatKr(netSum)}
-                      {!sumMatches && enteredTotal != null && ` (total says ${formatKr(enteredTotal)})`}
+                      Sum: {fmt(netSum)}
+                      {!sumMatches && enteredTotal != null && ` (total says ${fmt(enteredTotal)})`}
                     </span>
                   </span>
                 </div>

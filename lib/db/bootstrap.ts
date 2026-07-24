@@ -162,6 +162,9 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   // v12: per-receipt purchase channel (physical/online) — a store can be both
   addColumnIfMissing(sqlite, 'receipts', 'channel TEXT');
 
+  // v13: per-receipt currency (SEK/EUR/USD); existing rows default to SEK
+  addColumnIfMissing(sqlite, 'receipts', "currency TEXT NOT NULL DEFAULT 'SEK'");
+
   // v5: original name of the uploaded file (e.g. "Kvitto-1.pdf")
   addColumnIfMissing(sqlite, 'receipts', 'original_filename TEXT');
 

@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ScanDialog from '@/components/dialogs/ScanDialog';
-import { formatKr, statusBadge } from '@/lib/format';
+import { formatMoney, statusBadge } from '@/lib/format';
 import { channelLabel, STORE_CHANNELS } from '@/lib/store-categories';
 
 interface ReceiptRow {
   id: number;
   storeName: string | null;
   channel: string | null;
+  currency: string | null;
   originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
@@ -142,7 +143,7 @@ export default function ReceiptsPage() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {r.totalOre != null && (
-                      <span className="text-sm font-medium">{formatKr(r.totalOre)}</span>
+                      <span className="text-sm font-medium">{formatMoney(r.totalOre, r.currency)}</span>
                     )}
                     {statusBadge(r.status)}
                     <button

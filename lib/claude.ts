@@ -36,6 +36,8 @@ export interface ParsedReceipt {
   purchase_time: string | null;
   // Receipt/invoice number as printed (Kvittonr, Bong, Fakturanr, Invoice no).
   receipt_number: string | null;
+  // Currency of every amount: 'SEK', 'EUR' or 'USD'. Defaults to SEK.
+  currency: string;
   total_ore: number | null;
   // Deposit refund (PANTRETUR — returning empties for money back), positive öre.
   // A receipt-level credit subtracted from the item sum, never its own item.
@@ -66,9 +68,13 @@ const RECEIPT_SCHEMA = {
       type: ['string', 'null'],
       description: 'Receipt or invoice number as printed, verbatim (digits/letters, keep leading zeros). Labelled differently per chain: "Kvittonr", "Kvitto nr", "Kvitto/Faktura nr", "Bong", "Bongnr", "Fakturanr", "Invoice no", "Receipt no". NOT the date/time, org number, store number, cashier/till number, card number or loyalty number. null if not found.',
     },
+    currency: {
+      type: 'string',
+      description: "Currency of every amount on the receipt, as an ISO code: 'SEK' (Swedish kronor — 'kr', ':-'), 'EUR' (euro — '€', 'EUR') or 'USD' (US dollar — '$', 'USD'). Read it from the currency symbol/code printed next to the prices or the total. Default to 'SEK' when nothing indicates otherwise.",
+    },
     total_ore: {
       type: ['integer', 'null'],
-      description: 'Receipt grand total in öre (SEK cents), null if not found',
+      description: 'Receipt grand total in minor units (cents) of the currency above — SEK öre, or euro/dollar cents. null if not found',
     },
     pant_return_ore: {
       type: 'integer',
@@ -149,7 +155,7 @@ const RECEIPT_SCHEMA = {
       },
     },
   },
-  required: ['store_name', 'purchase_date', 'purchase_time', 'receipt_number', 'total_ore', 'pant_return_ore', 'delivery_fee_ore', 'service_fee_ore', 'items'],
+  required: ['store_name', 'purchase_date', 'purchase_time', 'receipt_number', 'currency', 'total_ore', 'pant_return_ore', 'delivery_fee_ore', 'service_fee_ore', 'items'],
   additionalProperties: false,
 } as const;
 
@@ -169,6 +175,7 @@ Swedish receipt conventions:
 - Do NOT create items for: PANT lines, VAT summaries (MOMS), subtotals, payment lines (KORT, KONTANT, Mastercard), change (VÄXEL), loyalty points, opening hours, addresses, or "Att betala".
 - Sanity: sum over items of (offer_total_ore if set, else line_total_ore) - discount_ore + pant_ore, then + delivery_fee_ore + service_fee_ore - pant_return_ore, should equal the receipt total.
 - The grand total is usually labelled "TOTALT", "ATT BETALA", "SUMMA" or "Total".
+- Currency: set the currency field from the symbol/code printed on the receipt — "kr" or ":-" → SEK, "€" or "EUR" → EUR, "$" or "USD" → USD. Most receipts are Swedish; default to SEK when nothing indicates a foreign currency. Amounts stay integer minor units (cents) of that currency regardless.
 - The receipt/invoice number goes in receipt_number: it is labelled differently per chain ("Kvittonr", "Kvitto nr", "Kvitto/Faktura nr", "Bong", "Bongnr", "Fakturanr", "Invoice no", "Receipt no"). Copy the value verbatim (keep leading zeros). Never confuse it with the date/time, org number (Org.nr), store/till number, cashier id, card number or loyalty/member number.
 - The OCR text may contain recognition errors; use the image to resolve them. In source_lines, quote the OCR lines VERBATIM as given (even if misrecognized) so they can be located later.
 - purchase_date: receipts print dates like "2026-07-01", "26-07-01" or "01.07.26"; output YYYY-MM-DD. The time usually follows the date ("2026-07-01 17:42"); output it as purchase_time in 24h HH:MM.

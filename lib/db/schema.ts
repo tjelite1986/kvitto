@@ -55,6 +55,9 @@ export const receipts = sqliteTable('receipts', {
   // because one store (e.g. Elgiganten) sells both ways. The store's own
   // `channel` is only a default suggestion. NULL = unspecified.
   channel: text('channel', { enum: ['physical', 'online'] }),
+  // Currency of every amount on this receipt. Amounts are minor units (cents)
+  // of this currency — SEK öre, or euro/dollar cents. Defaults to SEK.
+  currency: text('currency', { enum: ['SEK', 'EUR', 'USD'] }).notNull().default('SEK'),
   totalOre: integer('total_ore'),
   // Deposit refund (PANTRETUR — returning empties for money back). Stored as a
   // positive öre amount and subtracted from the item sum; never its own item.

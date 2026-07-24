@@ -51,6 +51,7 @@ export async function GET() {
       storeId: receipts.storeId,
       storeName: stores.name,
       channel: receipts.channel,
+      currency: receipts.currency,
       originalFilename: receipts.originalFilename,
       purchaseDate: receipts.purchaseDate,
       purchaseTime: receipts.purchaseTime,

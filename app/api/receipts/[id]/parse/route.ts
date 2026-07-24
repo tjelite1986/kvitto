@@ -8,6 +8,7 @@ import { getOwnedReceipt } from '@/lib/receipts';
 import { displayImagePath } from '@/lib/storage';
 import { runOcr, type OcrResult } from '@/lib/ocr';
 import { parseReceiptWithClaude, type ParsedReceipt } from '@/lib/claude';
+import { coerceCurrency } from '@/lib/currency';
 import { parseLocally } from '@/lib/local-parser';
 import { computeHeader, detectStore, loadStoreContext } from '@/lib/store-detection';
 import { bestMatch, normalizeAlias } from '@/lib/matching';
@@ -196,6 +197,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         purchaseDate: parsed.purchase_date,
         purchaseTime: parsed.purchase_time,
         receiptNumber: parsed.receipt_number ?? null,
+        currency: coerceCurrency(parsed.currency),
         totalOre: parsed.total_ore,
         pantReturnOre,
         deliveryFeeOre,

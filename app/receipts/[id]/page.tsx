@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatKr, statusBadge } from '@/lib/format';
+import { formatMoney, statusBadge } from '@/lib/format';
 import { channelLabel } from '@/lib/store-categories';
 import ReceiptImageViewer from '@/components/review/ReceiptImageViewer';
 import { ITEM_COLORS } from '@/components/review/ReceiptImageViewer';
@@ -31,6 +31,7 @@ interface ReceiptDetail {
   status: string;
   storeName: string | null;
   channel: string | null;
+  currency: string | null;
   originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
@@ -66,6 +67,9 @@ export default function ReceiptDetailPage() {
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!receipt) return <p className="text-sm text-gray-400">Loading...</p>;
+
+  // Every amount on the receipt is in its own currency.
+  const fmt = (minor: number) => formatMoney(minor, receipt.currency);
 
   return (
     <div className="space-y-4">
@@ -161,10 +165,10 @@ export default function ReceiptDetailPage() {
                   </p>
                   <p className="text-xs text-gray-400">
                     {item.qty} {item.unit === 'kg' ? 'kg' : 'pc'}
-                    {item.unitPriceOre != null && ` × ${formatKr(item.unitPriceOre)}`}
+                    {item.unitPriceOre != null && ` × ${fmt(item.unitPriceOre)}`}
                     {item.offerQty && item.offerTotalOre != null &&
-                      ` · ${item.offerQty} for ${formatKr(item.offerTotalOre)}`}
-                    {item.pantOre > 0 && ` · pant +${formatKr(item.pantOre)}`}
+                      ` · ${item.offerQty} for ${fmt(item.offerTotalOre)}`}
+                    {item.pantOre > 0 && ` · pant +${fmt(item.pantOre)}`}
                     {item.productName && (
                       <Link
                         href={`/products/${item.productId}`}
@@ -179,7 +183,7 @@ export default function ReceiptDetailPage() {
               </div>
               <span className="text-right shrink-0">
                 <span className="text-sm font-medium block">
-                  {formatKr(
+                  {fmt(
                     (item.offerQty && item.offerTotalOre != null
                       ? item.offerTotalOre
                       : item.lineTotalOre) -
@@ -195,7 +199,7 @@ export default function ReceiptDetailPage() {
                       : 0);
                   return saved > 0 ? (
                     <span className="text-[11px] text-green-600 block">
-                      saved {formatKr(saved)}
+                      saved {fmt(saved)}
                     </span>
                   ) : null;
                 })()}
@@ -205,19 +209,19 @@ export default function ReceiptDetailPage() {
           {receipt.deliveryFeeOre != null && receipt.deliveryFeeOre > 0 && (
             <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500">
               <span>Delivery fee</span>
-              <span>{formatKr(receipt.deliveryFeeOre)}</span>
+              <span>{fmt(receipt.deliveryFeeOre)}</span>
             </div>
           )}
           {receipt.serviceFeeOre != null && receipt.serviceFeeOre > 0 && (
             <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500">
               <span>Service fee</span>
-              <span>{formatKr(receipt.serviceFeeOre)}</span>
+              <span>{fmt(receipt.serviceFeeOre)}</span>
             </div>
           )}
           {receipt.pantReturnOre != null && receipt.pantReturnOre > 0 && (
             <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500">
               <span>Pant refund</span>
-              <span>−{formatKr(receipt.pantReturnOre)}</span>
+              <span>−{fmt(receipt.pantReturnOre)}</span>
             </div>
           )}
           {receipt.totalOre != null && (
@@ -236,11 +240,11 @@ export default function ReceiptDetailPage() {
                   );
                   return saved > 0 ? (
                     <span className="block text-xs font-normal text-green-600">
-                      saved {formatKr(saved)}
+                      saved {fmt(saved)}
                     </span>
                   ) : null;
                 })()}
-                {formatKr(receipt.totalOre)}
+                {fmt(receipt.totalOre)}
               </span>
             </div>
           )}

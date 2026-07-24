@@ -303,6 +303,7 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
       purchase_date: purchaseDate,
       purchase_time: purchaseTime,
       receipt_number: receiptNumber,
+      currency: 'SEK', // the rule-based parser only handles Swedish receipts
       total_ore: totalOre,
       pant_return_ore: pantReturnOre,
       delivery_fee_ore: deliveryFeeOre,
