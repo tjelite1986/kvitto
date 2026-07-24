@@ -52,9 +52,17 @@ describe('comparisonForBasis', () => {
     expect(comparisonForBasis(3000, 'pc', 6, 'pc', null)).toEqual({ ore: 500, per: 'st' });
   });
 
-  it("basis 'package' forces per st even with a weight amount", () => {
-    // Same 500 g bag, but the user wants the package price, not per kg.
-    expect(comparisonForBasis(1290, 'pc', 500, 'g', 'package')).toEqual({ ore: 1290, per: 'st' });
+  it('auto: piece product with no package amount has no comparison', () => {
+    // Milk 1.5L / coffee with no amount set → the per-st price would just equal
+    // the shown price, so nothing extra is displayed.
+    expect(comparisonForBasis(2490, 'pc', null, null, null)).toBeNull();
+  });
+
+  it("basis 'package' only compares real multipacks", () => {
+    // A single 500 g bag: per-package price equals the shown price → null.
+    expect(comparisonForBasis(1290, 'pc', 500, 'g', 'package')).toBeNull();
+    // A 6-pack: per st is meaningful.
+    expect(comparisonForBasis(3000, 'pc', 6, 'pc', 'package')).toEqual({ ore: 500, per: 'st' });
   });
 
   it("basis 'unit' forces per kg/l when a weight amount exists", () => {

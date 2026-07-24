@@ -58,10 +58,13 @@ export function comparisonForBasis(
   if (effective === 'unit') {
     return comparisonPriceOre(unitPriceOre, amountValue, amountUnit);
   }
-  // Per package/piece: divide a multipack (amountUnit 'pc') by its count,
-  // otherwise the whole package is one piece.
-  const count = amountUnit === 'pc' && amountValue && amountValue > 0 ? amountValue : 1;
-  return { ore: Math.round(unitPriceOre / count), per: 'st' };
+  // Per piece: only meaningful for a real multipack (amountUnit 'pc', count > 1)
+  // — e.g. a 6-pack for 30,00 → 5,00/st. For a single package the per-st price
+  // equals the price already shown, so there is nothing extra to display.
+  if (amountUnit === 'pc' && amountValue && amountValue > 1) {
+    return { ore: Math.round(unitPriceOre / amountValue), per: 'st' };
+  }
+  return null;
 }
 
 /** "1,5 l", "330 ml", "500 g", "6 st" */
