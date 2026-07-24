@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ScanDialog from '@/components/dialogs/ScanDialog';
-import { formatKr, statusBadge } from '@/lib/format';
+import { formatMoney, statusBadge } from '@/lib/format';
 
 interface ReceiptRow {
   id: number;
   storeName: string | null;
+  currency: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
   totalOre: number | null;
@@ -17,13 +18,14 @@ interface ReceiptRow {
 
 interface Stats {
   month: string;
-  monthSpendOre: number;
+  monthSpend: Array<{ currency: string; totalOre: number }>;
   priceChanges: Array<{
     productId: number;
     productName: string;
     storeName: string;
     fromOre: number;
     toOre: number;
+    currency: string;
     changePercent: number;
   }>;
 }
@@ -69,7 +71,17 @@ export default function HomePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-white rounded-lg shadow px-5 py-4">
             <p className="text-xs text-gray-400">Spent in {stats.month}</p>
-            <p className="text-2xl font-bold">{formatKr(stats.monthSpendOre)}</p>
+            {stats.monthSpend.length === 0 ? (
+              <p className="text-2xl font-bold">{formatMoney(0, 'SEK')}</p>
+            ) : (
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                {stats.monthSpend.map((s) => (
+                  <p key={s.currency} className="text-2xl font-bold">
+                    {formatMoney(s.totalOre, s.currency)}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
           <div className="bg-white rounded-lg shadow px-5 py-4">
             <p className="text-xs text-gray-400 mb-1.5">Biggest price changes</p>
@@ -124,7 +136,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-3">
                     {r.totalOre != null && (
-                      <span className="text-sm font-medium">{formatKr(r.totalOre)}</span>
+                      <span className="text-sm font-medium">{formatMoney(r.totalOre, r.currency)}</span>
                     )}
                     {statusBadge(r.status)}
                   </div>

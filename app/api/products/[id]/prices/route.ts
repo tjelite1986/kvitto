@@ -4,6 +4,7 @@ import { authOptions, sessionUserId } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { products, stores, manualPrices } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { coerceCurrency } from '@/lib/currency';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const unit = body.unit === 'kg' ? 'kg' : 'pc';
+  const currency = coerceCurrency(body.currency);
 
   const purchaseDate = typeof body.purchaseDate === 'string' ? body.purchaseDate.trim() : '';
   if (!DATE_RE.test(purchaseDate)) {
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const row = db
     .insert(manualPrices)
-    .values({ productId, storeId, unit, unitPriceOre, purchaseDate, note })
+    .values({ productId, storeId, unit, unitPriceOre, currency, purchaseDate, note })
     .returning()
     .get();
   return NextResponse.json(row);

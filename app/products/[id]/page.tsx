@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PriceHistoryChart, { type PriceSeries } from '@/components/charts/PriceHistoryChart';
-import { formatKr } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
+import { CURRENCIES, currencySymbol } from '@/lib/currency';
 import { AMOUNT_UNITS, comparisonForBasis, formatAmount } from '@/lib/units';
 import ProductCategorySelect from '@/components/ProductCategorySelect';
 
@@ -15,12 +16,21 @@ interface Observation {
   unitPriceOre: number;
   qty: number;
   unit: string;
+  currency: string;
   discountOre: number;
   pantOre: number;
   offerQty: number | null;
   offerTotalOre: number | null;
   receiptId: number | null;
   manualPriceId: number | null;
+}
+
+interface CurrencyStats {
+  currency: string;
+  count: number;
+  minOre: number;
+  maxOre: number;
+  avgOre: number;
 }
 
 interface ProductAlias {
@@ -45,7 +55,7 @@ interface ProductDetail {
   amountUnit: string | null;
   comparisonBasis: string | null;
   history: Observation[];
-  stats: { minOre: number; maxOre: number; avgOre: number } | null;
+  statsByCurrency: CurrencyStats[];
 }
 
 // "39,90 kr/kg" for weight buys, package-amount comparison for piece buys,
@@ -58,7 +68,7 @@ function comparisonLabel(product: ProductDetail, obs: Observation): string | nul
     product.amountUnit,
     product.comparisonBasis as 'unit' | 'package' | null
   );
-  return cmp ? `${formatKr(cmp.ore)}/${cmp.per}` : null;
+  return cmp ? `${formatMoney(cmp.ore, obs.currency)}/${cmp.per}` : null;
 }
 
 export default function ProductDetailPage() {
@@ -69,7 +79,7 @@ export default function ProductDetailPage() {
   const [deleting, setDeleting] = useState(false);
   // Add a price by hand (no scanned receipt).
   const [showAddPrice, setShowAddPrice] = useState(false);
-  const [priceForm, setPriceForm] = useState({ storeId: '', unitPriceKr: '', unit: 'pc', purchaseDate: '', note: '' });
+  const [priceForm, setPriceForm] = useState({ storeId: '', unitPriceKr: '', unit: 'pc', currency: 'SEK', purchaseDate: '', note: '' });
   const [savingPrice, setSavingPrice] = useState(false);
   const [priceError, setPriceError] = useState('');
   const [storeFilter, setStoreFilter] = useState<number | null>(null);
@@ -180,10 +190,13 @@ export default function ProductDetailPage() {
 
   function openAddPrice() {
     const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD in Sweden
+    // Default the currency to the one this product is most often priced in.
+    const common = product?.statsByCurrency[0]?.currency ?? 'SEK';
     setPriceForm({
       storeId: storeOptions[0] ? String(storeOptions[0].id) : '',
       unitPriceKr: '',
       unit: 'pc',
+      currency: common,
       purchaseDate: today,
       note: '',
     });
@@ -206,6 +219,7 @@ export default function ProductDetailPage() {
         storeId: Number(priceForm.storeId),
         unitPriceOre: Math.round(kr * 100),
         unit: priceForm.unit,
+        currency: priceForm.currency,
         purchaseDate: priceForm.purchaseDate,
         note: priceForm.note.trim() || null,
       }),
@@ -246,11 +260,16 @@ export default function ProductDetailPage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [product]);
 
+  // The chart plots a single currency (prices in different currencies aren't
+  // comparable on one axis) — the product's primary/most-common currency.
+  const chartCurrency = product?.statsByCurrency[0]?.currency ?? 'SEK';
+
   const series: PriceSeries[] = useMemo(() => {
     if (!product) return [];
     const byStore = new Map<number, { label: string; points: { date: string; valueOre: number }[] }>();
     for (const obs of product.history) {
       if (storeFilter != null && obs.storeId !== storeFilter) continue;
+      if (obs.currency !== chartCurrency) continue;
       let s = byStore.get(obs.storeId);
       if (!s) {
         s = { label: obs.storeName, points: [] };
@@ -259,7 +278,7 @@ export default function ProductDetailPage() {
       s.points.push({ date: obs.purchaseDate, valueOre: obs.unitPriceOre });
     }
     return Array.from(byStore.values());
-  }, [product, storeFilter]);
+  }, [product, storeFilter, chartCurrency]);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!product) return <p className="text-sm text-gray-400">Loading...</p>;
@@ -411,20 +430,25 @@ export default function ProductDetailPage() {
         </div>
       )}
 
-      {product.stats && (
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Lowest', value: product.stats.minOre },
-            { label: 'Average', value: product.stats.avgOre },
-            { label: 'Highest', value: product.stats.maxOre },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-lg shadow px-4 py-3 text-center">
-              <p className="text-xs text-gray-400">{stat.label}</p>
-              <p className="text-lg font-semibold">{formatKr(stat.value)}</p>
-            </div>
-          ))}
+      {product.statsByCurrency.map((cs) => (
+        <div key={cs.currency} className="space-y-1">
+          {product.statsByCurrency.length > 1 && (
+            <p className="text-xs font-medium text-gray-400 px-1">{cs.currency}</p>
+          )}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Lowest', value: cs.minOre },
+              { label: 'Average', value: cs.avgOre },
+              { label: 'Highest', value: cs.maxOre },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-white rounded-lg shadow px-4 py-3 text-center">
+                <p className="text-xs text-gray-400">{stat.label}</p>
+                <p className="text-lg font-semibold">{formatMoney(stat.value, cs.currency)}</p>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+      ))}
 
       {storeNames.length > 1 && (
         <div className="flex flex-wrap gap-2">
@@ -455,8 +479,13 @@ export default function ProductDetailPage() {
       )}
 
       <div className="bg-white rounded-lg shadow p-4">
-        <h2 className="font-semibold text-sm mb-3">Price history</h2>
-        <PriceHistoryChart series={series} />
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-sm">Price history</h2>
+          {product.statsByCurrency.length > 1 && (
+            <span className="text-xs text-gray-400">Showing {chartCurrency}</span>
+          )}
+        </div>
+        <PriceHistoryChart series={series} currency={chartCurrency} />
       </div>
 
       <div className="bg-white rounded-lg shadow p-4 space-y-3">
@@ -538,7 +567,7 @@ export default function ProductDetailPage() {
               Add a price by hand — for a product you have not scanned a receipt for.
               It joins the price history and comparison price like any other purchase.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Store</label>
                 <select
@@ -562,7 +591,7 @@ export default function ProductDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Price (kr)</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Price ({currencySymbol(priceForm.currency)})</label>
                 <input
                   value={priceForm.unitPriceKr}
                   onChange={(e) => setPriceForm((f) => ({ ...f, unitPriceKr: e.target.value }))}
@@ -570,6 +599,18 @@ export default function ProductDetailPage() {
                   inputMode="decimal"
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Currency</label>
+                <select
+                  value={priceForm.currency}
+                  onChange={(e) => setPriceForm((f) => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Priced by</label>
@@ -642,7 +683,7 @@ export default function ProductDetailPage() {
                     {obs.qty} {obs.unit === 'kg' ? 'kg' : 'pc'}
                   </td>
                   <td className="px-4 py-2 text-right font-medium">
-                    {formatKr(obs.unitPriceOre)}
+                    {formatMoney(obs.unitPriceOre, obs.currency)}
                     {obs.unit === 'kg' ? '/kg' : ''}
                   </td>
                   <td className="px-4 py-2 text-right text-gray-400">
@@ -650,16 +691,16 @@ export default function ProductDetailPage() {
                   </td>
                   <td className="px-4 py-2 text-right text-gray-400 whitespace-nowrap">
                     {obs.offerQty && obs.offerTotalOre != null
-                      ? `${obs.offerQty} for ${formatKr(obs.offerTotalOre)}`
+                      ? `${obs.offerQty} for ${formatMoney(obs.offerTotalOre, obs.currency)}`
                       : ''}
                   </td>
                   <td className="px-4 py-2 text-right text-gray-400 whitespace-nowrap">
                     {obs.pantOre > 0 && obs.qty > 0
-                      ? `${formatKr(Math.round(obs.pantOre / obs.qty))}/st`
+                      ? `${formatMoney(Math.round(obs.pantOre / obs.qty), obs.currency)}/st`
                       : ''}
                   </td>
                   <td className="px-4 py-2 text-right text-gray-400">
-                    {obs.discountOre > 0 ? `-${formatKr(obs.discountOre)}` : ''}
+                    {obs.discountOre > 0 ? `-${formatMoney(obs.discountOre, obs.currency)}` : ''}
                   </td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">
                     {obs.manualPriceId != null ? (

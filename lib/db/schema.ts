@@ -156,6 +156,7 @@ export const manualPrices = sqliteTable('manual_prices', {
   // Price per piece ('pc') or already per kg ('kg') — mirrors receipt_items.unit.
   unit: text('unit', { enum: ['pc', 'kg'] }).notNull().default('pc'),
   unitPriceOre: integer('unit_price_ore').notNull(),
+  currency: text('currency', { enum: ['SEK', 'EUR', 'USD'] }).notNull().default('SEK'),
   purchaseDate: text('purchase_date').notNull(), // YYYY-MM-DD
   note: text('note'),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),

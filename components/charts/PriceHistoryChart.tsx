@@ -16,15 +16,20 @@ export interface PriceSeries {
 interface PriceHistoryChartProps {
   series: PriceSeries[];
   height?: number;
+  currency?: string; // shown on the y-axis; all points must be this currency
 }
 
 const SERIES_COLORS = ['#16a34a', '#2563eb', '#d97706', '#dc2626', '#7c3aed', '#0891b2'];
 
-function formatKrShort(ore: number): string {
-  return (ore / 100).toLocaleString('sv-SE', { maximumFractionDigits: 2 });
+const SYMBOLS: Record<string, string> = { SEK: 'kr', EUR: '€', USD: '$' };
+
+function formatShort(minor: number, currency: string): string {
+  const locale = currency === 'USD' ? 'en-US' : 'sv-SE';
+  return (minor / 100).toLocaleString(locale, { maximumFractionDigits: 2 });
 }
 
-export default function PriceHistoryChart({ series, height = 240 }: PriceHistoryChartProps) {
+export default function PriceHistoryChart({ series, height = 240, currency = 'SEK' }: PriceHistoryChartProps) {
+  const symbol = SYMBOLS[currency] ?? 'kr';
   const allPoints = series.flatMap((s) => s.points);
   if (allPoints.length === 0) {
     return <p className="text-sm text-gray-400">No price data yet.</p>;
@@ -77,7 +82,7 @@ export default function PriceHistoryChart({ series, height = 240 }: PriceHistory
                   strokeWidth={1}
                 />
                 <text x={padding.left - 6} y={y + 3} textAnchor="end" className="text-[9px] fill-gray-400">
-                  {formatKrShort(value)}
+                  {formatShort(value, currency)} {symbol}
                 </text>
               </g>
             );
@@ -94,7 +99,7 @@ export default function PriceHistoryChart({ series, height = 240 }: PriceHistory
                   <g key={i}>
                     <circle cx={p.x} cy={p.y} r={3.5} fill={color} stroke="white" strokeWidth={2} />
                     <text x={p.x} y={p.y - 9} textAnchor="middle" className="text-[9px] fill-gray-600">
-                      {formatKrShort(p.valueOre)}
+                      {formatShort(p.valueOre, currency)}
                     </text>
                   </g>
                 ))}

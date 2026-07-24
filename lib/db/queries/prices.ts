@@ -16,6 +16,7 @@ const OBSERVATIONS_CTE = `
       r.store_id,
       s.name AS store_name,
       r.purchase_date,
+      r.currency,
       r.id AS receipt_id,
       NULL AS manual_price_id,
       ri.qty,
@@ -47,6 +48,7 @@ const OBSERVATIONS_CTE = `
       mp.store_id,
       s.name AS store_name,
       mp.purchase_date,
+      mp.currency,
       NULL AS receipt_id,
       mp.id AS manual_price_id,
       1 AS qty,
@@ -62,7 +64,7 @@ const OBSERVATIONS_CTE = `
   obs AS (
     SELECT raw.*,
       ROW_NUMBER() OVER (
-        PARTITION BY product_id, store_id
+        PARTITION BY product_id, store_id, currency
         ORDER BY purchase_date DESC, receipt_id DESC, manual_price_id DESC
       ) AS rn
     FROM raw
@@ -74,6 +76,7 @@ export interface StorePrice {
   storeName: string;
   unitPriceOre: number;
   unit: string; // 'kg' observations are already a per-kg price
+  currency: string; // currency of this observation (SEK/EUR/USD)
   previousPriceOre: number | null;
   purchaseDate: string;
 }
@@ -121,12 +124,13 @@ export function productsWithLatestPrice(search?: string): ProductListEntry[] {
     .prepare(
       `${OBSERVATIONS_CTE}
        SELECT latest.product_id, latest.store_id, latest.store_name,
-              latest.unit_price_ore, latest.unit, latest.purchase_date,
+              latest.unit_price_ore, latest.unit, latest.currency, latest.purchase_date,
               prev.unit_price_ore AS previous_price_ore
        FROM obs latest
        LEFT JOIN obs prev
          ON prev.product_id = latest.product_id
         AND prev.store_id = latest.store_id
+        AND prev.currency = latest.currency
         AND prev.rn = 2
        WHERE latest.rn = 1`
     )
@@ -136,6 +140,7 @@ export function productsWithLatestPrice(search?: string): ProductListEntry[] {
     store_name: string;
     unit_price_ore: number;
     unit: string;
+    currency: string;
     purchase_date: string;
     previous_price_ore: number | null;
   }>;
@@ -148,6 +153,7 @@ export function productsWithLatestPrice(search?: string): ProductListEntry[] {
       storeName: row.store_name,
       unitPriceOre: row.unit_price_ore,
       unit: row.unit,
+      currency: row.currency,
       previousPriceOre: row.previous_price_ore,
       purchaseDate: row.purchase_date,
     });
@@ -164,6 +170,7 @@ export interface PriceObservation {
   unitPriceOre: number;
   qty: number;
   unit: string;
+  currency: string; // currency of this observation (SEK/EUR/USD)
   discountOre: number;
   pantOre: number; // deposit for the whole line — divide by qty for per-can pant
   offerQty: number | null; // multi-buy applied, e.g. 4 for 24.00
@@ -178,8 +185,8 @@ export function priceHistory(productId: number): PriceObservation[] {
     .prepare(
       `${OBSERVATIONS_CTE}
        SELECT store_id, store_name, purchase_date, unit_price_ore, qty, unit,
-              discount_ore, pant_ore, offer_qty, offer_total_ore, receipt_id,
-              manual_price_id
+              currency, discount_ore, pant_ore, offer_qty, offer_total_ore,
+              receipt_id, manual_price_id
        FROM obs
        WHERE product_id = ?
        ORDER BY purchase_date ASC, receipt_id ASC, manual_price_id ASC`
@@ -191,6 +198,7 @@ export function priceHistory(productId: number): PriceObservation[] {
     unit_price_ore: number;
     qty: number;
     unit: string;
+    currency: string;
     discount_ore: number;
     pant_ore: number;
     offer_qty: number | null;
@@ -206,6 +214,7 @@ export function priceHistory(productId: number): PriceObservation[] {
     unitPriceOre: r.unit_price_ore,
     qty: r.qty,
     unit: r.unit,
+    currency: r.currency,
     discountOre: r.discount_ore,
     pantOre: r.pant_ore,
     offerQty: r.offer_qty,
@@ -221,22 +230,25 @@ export interface PriceChange {
   storeName: string;
   fromOre: number;
   toOre: number;
+  currency: string;
   changePercent: number;
   purchaseDate: string;
 }
 
-/** Largest recent price changes (latest vs previous observation per store). */
+/** Largest recent price changes (latest vs previous observation per store &
+ * currency — prices in different currencies are never compared). */
 export function biggestPriceChanges(limit: number): PriceChange[] {
   const rows = sqlite
     .prepare(
       `${OBSERVATIONS_CTE}
        SELECT p.id AS product_id, p.name AS product_name, latest.store_name,
               prev.unit_price_ore AS from_ore, latest.unit_price_ore AS to_ore,
-              latest.purchase_date
+              latest.currency, latest.purchase_date
        FROM obs latest
        JOIN obs prev
          ON prev.product_id = latest.product_id
         AND prev.store_id = latest.store_id
+        AND prev.currency = latest.currency
         AND prev.rn = 2
        JOIN products p ON p.id = latest.product_id
        WHERE latest.rn = 1
@@ -251,6 +263,7 @@ export function biggestPriceChanges(limit: number): PriceChange[] {
     store_name: string;
     from_ore: number;
     to_ore: number;
+    currency: string;
     purchase_date: string;
   }>;
 
@@ -260,19 +273,29 @@ export function biggestPriceChanges(limit: number): PriceChange[] {
     storeName: r.store_name,
     fromOre: r.from_ore,
     toOre: r.to_ore,
+    currency: r.currency,
     changePercent: (r.to_ore / r.from_ore - 1) * 100,
     purchaseDate: r.purchase_date,
   }));
 }
 
-/** Total confirmed spend (öre) for receipts in a YYYY-MM month, for one user. */
-export function monthSpend(userId: number, month: string): number {
-  const row = sqlite
+export interface CurrencySpend {
+  currency: string;
+  totalOre: number;
+}
+
+/** Confirmed spend for a YYYY-MM month, split per currency (never summed
+ * across currencies). Ordered by amount, largest first. */
+export function monthSpend(userId: number, month: string): CurrencySpend[] {
+  const rows = sqlite
     .prepare(
-      `SELECT COALESCE(SUM(total_ore), 0) AS total
+      `SELECT currency, COALESCE(SUM(total_ore), 0) AS total
        FROM receipts
-       WHERE user_id = ? AND status = 'confirmed' AND purchase_date LIKE ? || '%'`
+       WHERE user_id = ? AND status = 'confirmed'
+         AND purchase_date LIKE ? || '%' AND total_ore IS NOT NULL
+       GROUP BY currency
+       ORDER BY total DESC`
     )
-    .get(userId, month) as { total: number };
-  return row.total;
+    .all(userId, month) as Array<{ currency: string; total: number }>;
+  return rows.map((r) => ({ currency: r.currency ?? 'SEK', totalOre: r.total }));
 }

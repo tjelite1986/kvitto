@@ -15,7 +15,7 @@ export async function GET() {
 
   return NextResponse.json({
     month,
-    monthSpendOre: monthSpend(userId, month),
+    monthSpend: monthSpend(userId, month),
     priceChanges: biggestPriceChanges(5),
   });
 }

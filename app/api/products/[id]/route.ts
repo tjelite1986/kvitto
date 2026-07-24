@@ -20,17 +20,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!product) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const history = priceHistory(productId);
-  const priceValues = history.map((h) => h.unitPriceOre);
-  const stats =
-    priceValues.length > 0
-      ? {
-          minOre: Math.min(...priceValues),
-          maxOre: Math.max(...priceValues),
-          avgOre: Math.round(priceValues.reduce((a, b) => a + b, 0) / priceValues.length),
-        }
-      : null;
 
-  return NextResponse.json({ ...product, history, stats });
+  // Stats are computed PER currency — min/avg/max across different currencies
+  // would be meaningless. One block per currency present, ordered by count.
+  const byCurrency = new Map<string, number[]>();
+  for (const h of history) {
+    const list = byCurrency.get(h.currency) ?? [];
+    list.push(h.unitPriceOre);
+    byCurrency.set(h.currency, list);
+  }
+  const statsByCurrency = Array.from(byCurrency.entries())
+    .map(([currency, values]) => ({
+      currency,
+      count: values.length,
+      minOre: Math.min(...values),
+      maxOre: Math.max(...values),
+      avgOre: Math.round(values.reduce((a, b) => a + b, 0) / values.length),
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  return NextResponse.json({ ...product, history, statsByCurrency });
 }
 
 // Edit product metadata: name, brand, category, package amount.
