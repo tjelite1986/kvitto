@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ScanDialog from '@/components/dialogs/ScanDialog';
 import { formatKr, statusBadge } from '@/lib/format';
+import { channelLabel } from '@/lib/store-categories';
 
 interface ReceiptRow {
   id: number;
   storeName: string | null;
+  channel: string | null;
   originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
@@ -91,6 +93,9 @@ export default function ReceiptsPage() {
                     <p className="text-xs text-gray-400">
                       {r.purchaseDate ?? r.createdAt.slice(0, 10)}
                       {r.purchaseTime && ` kl ${r.purchaseTime}`}
+                      {channelLabel(r.channel) && (
+                        <span className="ml-2 text-gray-400">· {channelLabel(r.channel)}</span>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">

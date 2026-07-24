@@ -83,7 +83,8 @@ interface ReceiptDetail {
   purchaseDate: string | null;
   purchaseTime: string | null;
   receiptNumber: string | null;
-  storeChannel: string | null;
+  channel: string | null; // this receipt's own purchase channel
+  storeChannel: string | null; // the store's default channel (fallback)
   storeCategory: string | null;
   totalOre: number | null;
   pantReturnOre: number | null;
@@ -176,7 +177,8 @@ export default function ReviewPage() {
     const suggestions = itemSuggestions(data.claudeRaw, loaded);
     setItems(loaded.map((item, i) => ({ ...item, suggestion: suggestions[i] })));
     setStoreName(data.storeName ?? '');
-    setStoreChannel(data.storeChannel ?? '');
+    // Prefer this receipt's own channel; fall back to the store's default.
+    setStoreChannel(data.channel ?? data.storeChannel ?? '');
     setStoreCategory(data.storeCategory ?? '');
     setPurchaseDate(data.purchaseDate ?? '');
     setPurchaseTime(data.purchaseTime ?? '');

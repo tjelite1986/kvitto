@@ -50,6 +50,7 @@ export async function GET() {
       id: receipts.id,
       storeId: receipts.storeId,
       storeName: stores.name,
+      channel: receipts.channel,
       originalFilename: receipts.originalFilename,
       purchaseDate: receipts.purchaseDate,
       purchaseTime: receipts.purchaseTime,

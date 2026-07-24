@@ -51,6 +51,10 @@ export const receipts = sqliteTable('receipts', {
   storeId: integer('store_id').references(() => stores.id),
   purchaseDate: text('purchase_date'), // YYYY-MM-DD
   purchaseTime: text('purchase_time'), // HH:MM
+  // How THIS purchase was made — in a physical shop or online. Per receipt
+  // because one store (e.g. Elgiganten) sells both ways. The store's own
+  // `channel` is only a default suggestion. NULL = unspecified.
+  channel: text('channel', { enum: ['physical', 'online'] }),
   totalOre: integer('total_ore'),
   // Deposit refund (PANTRETUR — returning empties for money back). Stored as a
   // positive öre amount and subtracted from the item sum; never its own item.

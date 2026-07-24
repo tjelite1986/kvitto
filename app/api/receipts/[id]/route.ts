@@ -65,14 +65,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 
   const confirm = sqlite.transaction(() => {
-    // Classification carried from the review form onto the resolved store.
-    // Only applied when the client sent the field (so blank forms never wipe
-    // an existing store's channel/category).
+    // The purchase channel is per RECEIPT (a store like Elgiganten sells both
+    // in-store and online). Category stays store-level. Both only applied when
+    // the client sent the field, so blank forms never wipe existing values.
     const channel = 'storeChannel' in body ? coerceChannel(storeChannel) : undefined;
     const category = 'storeCategory' in body ? coerceCategory(storeCategory) : undefined;
-    const storePatch: { channel?: 'physical' | 'online' | null; category?: string | null } = {};
-    if (channel !== undefined) storePatch.channel = channel;
-    if (category !== undefined) storePatch.category = category;
+
+    // On store CREATION the channel seeds the new store's default; category is
+    // synced on both create and update. An EXISTING store's channel is never
+    // overwritten from a receipt — that would flip-flop a both-ways store.
+    const storeCreate: { channel?: 'physical' | 'online' | null; category?: string | null } = {};
+    if (channel !== undefined) storeCreate.channel = channel;
+    if (category !== undefined) storeCreate.category = category;
+    const storeUpdate: { category?: string | null } = {};
+    if (category !== undefined) storeUpdate.category = category;
 
     // Resolve store: existing id, or create by name
     let resolvedStoreId: number | null = null;
@@ -83,12 +89,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const existing = db.select().from(stores).where(eq(stores.name, name)).get();
       resolvedStoreId = existing
         ? existing.id
-        : db.insert(stores).values({ name, ...storePatch }).returning().get().id;
+        : db.insert(stores).values({ name, ...storeCreate }).returning().get().id;
     }
 
-    // Keep the store's channel/category in sync with the review form.
-    if (resolvedStoreId != null && Object.keys(storePatch).length > 0) {
-      db.update(stores).set(storePatch).where(eq(stores.id, resolvedStoreId)).run();
+    // Keep the store's category in sync with the review form (channel is not).
+    if (resolvedStoreId != null && Object.keys(storeUpdate).length > 0) {
+      db.update(stores).set(storeUpdate).where(eq(stores.id, resolvedStoreId)).run();
     }
 
     // Decay wrong auto-links before the parse-time items are replaced
@@ -192,6 +198,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     db.update(receipts)
       .set({
         storeId: resolvedStoreId,
+        channel: channel !== undefined ? channel : receipt.channel,
         purchaseDate: typeof purchaseDate === 'string' ? purchaseDate : null,
         purchaseTime: typeof purchaseTime === 'string' && purchaseTime ? purchaseTime : null,
         receiptNumber: typeof receiptNumber === 'string' && receiptNumber.trim() ? receiptNumber.trim() : null,

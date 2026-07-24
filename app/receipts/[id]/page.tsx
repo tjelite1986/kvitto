@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatKr, statusBadge } from '@/lib/format';
+import { channelLabel } from '@/lib/store-categories';
 import ReceiptImageViewer from '@/components/review/ReceiptImageViewer';
 import { ITEM_COLORS } from '@/components/review/ReceiptImageViewer';
 
@@ -29,6 +30,7 @@ interface ReceiptDetail {
   id: number;
   status: string;
   storeName: string | null;
+  channel: string | null;
   originalFilename: string | null;
   purchaseDate: string | null;
   purchaseTime: string | null;
@@ -72,8 +74,13 @@ export default function ReceiptDetailPage() {
           <Link href="/receipts" className="text-sm text-green-600 hover:underline">
             &larr; Receipts
           </Link>
-          <h1 className="text-xl font-bold mt-1">
+          <h1 className="text-xl font-bold mt-1 flex items-center gap-2">
             {receipt.storeName ?? 'Unknown store'}
+            {channelLabel(receipt.channel) && (
+              <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                {channelLabel(receipt.channel)}
+              </span>
+            )}
           </h1>
           <p className="text-sm text-gray-400">
             {receipt.purchaseDate}
