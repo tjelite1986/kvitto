@@ -19,7 +19,8 @@ interface Observation {
   pantOre: number;
   offerQty: number | null;
   offerTotalOre: number | null;
-  receiptId: number;
+  receiptId: number | null;
+  manualPriceId: number | null;
 }
 
 interface ProductAlias {
@@ -66,6 +67,11 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Add a price by hand (no scanned receipt).
+  const [showAddPrice, setShowAddPrice] = useState(false);
+  const [priceForm, setPriceForm] = useState({ storeId: '', unitPriceKr: '', unit: 'pc', purchaseDate: '', note: '' });
+  const [savingPrice, setSavingPrice] = useState(false);
+  const [priceError, setPriceError] = useState('');
   const [storeFilter, setStoreFilter] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
@@ -160,12 +166,66 @@ export default function ProductDetailPage() {
     }
   }
 
-  useEffect(() => {
-    fetch(`/api/products/${params.id}`)
+  function loadProduct() {
+    return fetch(`/api/products/${params.id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setProduct)
       .catch(() => setError('Could not load the product.'));
+  }
+
+  useEffect(() => {
+    loadProduct();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
+
+  function openAddPrice() {
+    const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD in Sweden
+    setPriceForm({
+      storeId: storeOptions[0] ? String(storeOptions[0].id) : '',
+      unitPriceKr: '',
+      unit: 'pc',
+      purchaseDate: today,
+      note: '',
+    });
+    setPriceError('');
+    setShowAddPrice(true);
+  }
+
+  async function addManualPrice() {
+    const kr = Number(priceForm.unitPriceKr.replace(',', '.'));
+    if (!priceForm.storeId || !Number.isFinite(kr) || kr <= 0) {
+      setPriceError('Pick a store and enter a price.');
+      return;
+    }
+    setSavingPrice(true);
+    setPriceError('');
+    const res = await fetch(`/api/products/${params.id}/prices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storeId: Number(priceForm.storeId),
+        unitPriceOre: Math.round(kr * 100),
+        unit: priceForm.unit,
+        purchaseDate: priceForm.purchaseDate,
+        note: priceForm.note.trim() || null,
+      }),
+    });
+    setSavingPrice(false);
+    if (res.ok) {
+      setShowAddPrice(false);
+      await loadProduct();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setPriceError(data.error || 'Could not save the price.');
+    }
+  }
+
+  async function deleteManualPrice(priceId: number) {
+    const res = await fetch(`/api/products/${params.id}/prices?priceId=${priceId}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) await loadProduct();
+  }
 
   async function deleteProduct() {
     setDeleting(true);
@@ -460,7 +520,97 @@ export default function ProductDetailPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <h2 className="font-semibold text-sm px-4 py-3 border-b border-gray-100">Purchases</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 className="font-semibold text-sm">Purchases</h2>
+          {!showAddPrice && (
+            <button
+              onClick={openAddPrice}
+              className="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-200"
+            >
+              + Add price
+            </button>
+          )}
+        </div>
+
+        {showAddPrice && (
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 space-y-3">
+            <p className="text-xs text-gray-500">
+              Add a price by hand — for a product you have not scanned a receipt for.
+              It joins the price history and comparison price like any other purchase.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Store</label>
+                <select
+                  value={priceForm.storeId}
+                  onChange={(e) => setPriceForm((f) => ({ ...f, storeId: e.target.value }))}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                >
+                  <option value="">Choose…</option>
+                  {storeOptions.map((store) => (
+                    <option key={store.id} value={store.id}>{store.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={priceForm.purchaseDate}
+                  onChange={(e) => setPriceForm((f) => ({ ...f, purchaseDate: e.target.value }))}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Price (kr)</label>
+                <input
+                  value={priceForm.unitPriceKr}
+                  onChange={(e) => setPriceForm((f) => ({ ...f, unitPriceKr: e.target.value }))}
+                  placeholder="e.g. 14,14"
+                  inputMode="decimal"
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Priced by</label>
+                <select
+                  value={priceForm.unit}
+                  onChange={(e) => setPriceForm((f) => ({ ...f, unit: e.target.value }))}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                >
+                  <option value="pc">Per package (st)</option>
+                  <option value="kg">Per kg</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Note</label>
+                <input
+                  value={priceForm.note}
+                  onChange={(e) => setPriceForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="optional"
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+              </div>
+            </div>
+            {priceError && <p className="text-xs text-red-600">{priceError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={addManualPrice}
+                disabled={savingPrice}
+                className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-md hover:bg-green-700 disabled:opacity-50"
+              >
+                {savingPrice ? 'Saving...' : 'Save price'}
+              </button>
+              <button
+                onClick={() => setShowAddPrice(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 px-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -477,9 +627,16 @@ export default function ProductDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
+              {product.history.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-6 text-center text-sm text-gray-400">
+                    No prices yet. Scan a receipt or use “+ Add price”.
+                  </td>
+                </tr>
+              )}
               {[...product.history].reverse().map((obs, i) => (
                 <tr key={i}>
-                  <td className="px-4 py-2">{obs.purchaseDate}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">{obs.purchaseDate}</td>
                   <td className="px-4 py-2">{obs.storeName}</td>
                   <td className="px-4 py-2 text-right">
                     {obs.qty} {obs.unit === 'kg' ? 'kg' : 'pc'}
@@ -504,13 +661,28 @@ export default function ProductDetailPage() {
                   <td className="px-4 py-2 text-right text-gray-400">
                     {obs.discountOre > 0 ? `-${formatKr(obs.discountOre)}` : ''}
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    <Link
-                      href={`/receipts/${obs.receiptId}`}
-                      className="text-xs text-green-600 hover:underline"
-                    >
-                      Receipt
-                    </Link>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">
+                    {obs.manualPriceId != null ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="text-xs text-gray-400">Manual</span>
+                        <button
+                          onClick={() => deleteManualPrice(obs.manualPriceId!)}
+                          className="text-gray-300 hover:text-red-500"
+                          aria-label="Delete manual price"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </span>
+                    ) : obs.receiptId != null ? (
+                      <Link
+                        href={`/receipts/${obs.receiptId}`}
+                        className="text-xs text-green-600 hover:underline"
+                      >
+                        Receipt
+                      </Link>
+                    ) : null}
                   </td>
                 </tr>
               ))}

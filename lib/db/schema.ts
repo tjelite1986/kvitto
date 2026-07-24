@@ -139,6 +139,23 @@ export const productAliases = sqliteTable('product_aliases', {
   index('product_aliases_alias_idx').on(t.aliasText),
 ]);
 
+// Hand-entered price observations for a product that never came from a scanned
+// receipt (e.g. a price noted in-store). Unioned into the price history the
+// same way confirmed receipt items are — see lib/db/queries/prices.ts.
+export const manualPrices = sqliteTable('manual_prices', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  productId: integer('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+  storeId: integer('store_id').notNull().references(() => stores.id, { onDelete: 'cascade' }),
+  // Price per piece ('pc') or already per kg ('kg') — mirrors receipt_items.unit.
+  unit: text('unit', { enum: ['pc', 'kg'] }).notNull().default('pc'),
+  unitPriceOre: integer('unit_price_ore').notNull(),
+  purchaseDate: text('purchase_date').notNull(), // YYYY-MM-DD
+  note: text('note'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (t) => [
+  index('manual_prices_product_idx').on(t.productId),
+]);
+
 // Managed list of product categories (defaults seeded from
 // lib/product-categories.ts, user-extensible). products.category stores the
 // chosen name as free text; deleting a category here never touches products.

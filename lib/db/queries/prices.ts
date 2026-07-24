@@ -5,14 +5,19 @@ import { sqlite } from '@/lib/db';
 // total/qty when an offer applies, per-kg price for weight items, otherwise
 // line total divided by quantity. Pant rows are excluded.
 
+// Price observations come from two sources, unioned before the ROW_NUMBER so
+// "latest per store" ranks across both: confirmed receipt items and
+// hand-entered manual_prices. Manual rows have receipt_id NULL and carry their
+// own manual_price_id so the UI can offer to delete them.
 const OBSERVATIONS_CTE = `
-  WITH obs AS (
+  WITH raw AS (
     SELECT
       ri.product_id,
       r.store_id,
       s.name AS store_name,
       r.purchase_date,
       r.id AS receipt_id,
+      NULL AS manual_price_id,
       ri.qty,
       ri.unit,
       ri.discount_ore,
@@ -27,11 +32,7 @@ const OBSERVATIONS_CTE = `
         WHEN ri.qty > 0
           THEN ri.line_total_ore * 1.0 / ri.qty
         ELSE ri.line_total_ore
-      END) AS INTEGER) AS unit_price_ore,
-      ROW_NUMBER() OVER (
-        PARTITION BY ri.product_id, r.store_id
-        ORDER BY r.purchase_date DESC, r.id DESC
-      ) AS rn
+      END) AS INTEGER) AS unit_price_ore
     FROM receipt_items ri
     JOIN receipts r ON r.id = ri.receipt_id
     JOIN stores s ON s.id = r.store_id
@@ -40,6 +41,31 @@ const OBSERVATIONS_CTE = `
       AND ri.is_pant = 0
       AND r.store_id IS NOT NULL
       AND r.purchase_date IS NOT NULL
+    UNION ALL
+    SELECT
+      mp.product_id,
+      mp.store_id,
+      s.name AS store_name,
+      mp.purchase_date,
+      NULL AS receipt_id,
+      mp.id AS manual_price_id,
+      1 AS qty,
+      mp.unit,
+      0 AS discount_ore,
+      0 AS pant_ore,
+      NULL AS offer_qty,
+      NULL AS offer_total_ore,
+      mp.unit_price_ore
+    FROM manual_prices mp
+    JOIN stores s ON s.id = mp.store_id
+  ),
+  obs AS (
+    SELECT raw.*,
+      ROW_NUMBER() OVER (
+        PARTITION BY product_id, store_id
+        ORDER BY purchase_date DESC, receipt_id DESC, manual_price_id DESC
+      ) AS rn
+    FROM raw
   )
 `;
 
@@ -142,7 +168,8 @@ export interface PriceObservation {
   pantOre: number; // deposit for the whole line — divide by qty for per-can pant
   offerQty: number | null; // multi-buy applied, e.g. 4 for 24.00
   offerTotalOre: number | null;
-  receiptId: number;
+  receiptId: number | null; // null for a hand-entered manual price
+  manualPriceId: number | null; // set only for manual prices (so they can be deleted)
 }
 
 /** All price observations for one product, oldest first. */
@@ -151,10 +178,11 @@ export function priceHistory(productId: number): PriceObservation[] {
     .prepare(
       `${OBSERVATIONS_CTE}
        SELECT store_id, store_name, purchase_date, unit_price_ore, qty, unit,
-              discount_ore, pant_ore, offer_qty, offer_total_ore, receipt_id
+              discount_ore, pant_ore, offer_qty, offer_total_ore, receipt_id,
+              manual_price_id
        FROM obs
        WHERE product_id = ?
-       ORDER BY purchase_date ASC, receipt_id ASC`
+       ORDER BY purchase_date ASC, receipt_id ASC, manual_price_id ASC`
     )
     .all(productId) as Array<{
     store_id: number;
@@ -167,7 +195,8 @@ export function priceHistory(productId: number): PriceObservation[] {
     pant_ore: number;
     offer_qty: number | null;
     offer_total_ore: number | null;
-    receipt_id: number;
+    receipt_id: number | null;
+    manual_price_id: number | null;
   }>;
 
   return rows.map((r) => ({
@@ -182,6 +211,7 @@ export function priceHistory(productId: number): PriceObservation[] {
     offerQty: r.offer_qty,
     offerTotalOre: r.offer_total_ore,
     receiptId: r.receipt_id,
+    manualPriceId: r.manual_price_id,
   }));
 }
 
