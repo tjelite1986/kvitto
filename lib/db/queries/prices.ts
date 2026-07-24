@@ -59,6 +59,7 @@ export interface ProductListEntry {
   category: string | null;
   amountValue: number | null;
   amountUnit: string | null;
+  comparisonBasis: string | null;
   prices: StorePrice[];
 }
 
@@ -66,7 +67,8 @@ export interface ProductListEntry {
 export function productsWithLatestPrice(search?: string): ProductListEntry[] {
   const term = search?.trim();
   const productSelect = `SELECT id, name, brand, category,
-      amount_value AS amountValue, amount_unit AS amountUnit FROM products`;
+      amount_value AS amountValue, amount_unit AS amountUnit,
+      comparison_basis AS comparisonBasis FROM products`;
   const products = (
     term
       ? sqlite
@@ -86,6 +88,7 @@ export function productsWithLatestPrice(search?: string): ProductListEntry[] {
     category: string | null;
     amountValue: number | null;
     amountUnit: string | null;
+    comparisonBasis: string | null;
   }>;
 
   const priceRows = sqlite

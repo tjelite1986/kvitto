@@ -16,9 +16,11 @@ const TO_BASE: Record<string, { factor: number; base: 'kg' | 'l' }> = {
 };
 
 export interface ComparisonPrice {
-  ore: number; // öre per base unit (kg or l)
-  per: 'kg' | 'l';
+  ore: number; // öre per base unit (kg, l or st)
+  per: 'kg' | 'l' | 'st';
 }
+
+export type ComparisonBasis = 'unit' | 'package';
 
 /** Comparison price per kg/l from a per-piece price and the package amount. */
 export function comparisonPriceOre(
@@ -30,6 +32,36 @@ export function comparisonPriceOre(
   const conv = TO_BASE[amountUnit];
   if (!conv) return null;
   return { ore: Math.round(unitPriceOre / (amountValue * conv.factor)), per: conv.base };
+}
+
+/**
+ * Comparison price (jämförpris) for one price observation, honouring the
+ * product's chosen basis:
+ *  - weight/volume buys (receipt unit 'kg') are inherently per-kg;
+ *  - basis 'unit'  → per kg/l, normalized from a weight/volume package amount
+ *    (so a packaged veg and a loose-weight buy line up at e.g. 34,90/kg);
+ *  - basis 'package' → per piece (kr/st), dividing a multipack by its count;
+ *  - basis null (auto) → per kg/l when the amount is weight/volume, else per st.
+ */
+export function comparisonForBasis(
+  unitPriceOre: number,
+  receiptUnit: string, // 'pc' | 'kg' as recorded on the receipt line
+  amountValue: number | null | undefined,
+  amountUnit: string | null | undefined,
+  basis: ComparisonBasis | null | undefined
+): ComparisonPrice | null {
+  if (receiptUnit === 'kg') return { ore: unitPriceOre, per: 'kg' };
+
+  const isWeightVolume = !!amountUnit && amountUnit !== 'pc' && amountUnit in TO_BASE;
+  const effective: ComparisonBasis = basis ?? (isWeightVolume ? 'unit' : 'package');
+
+  if (effective === 'unit') {
+    return comparisonPriceOre(unitPriceOre, amountValue, amountUnit);
+  }
+  // Per package/piece: divide a multipack (amountUnit 'pc') by its count,
+  // otherwise the whole package is one piece.
+  const count = amountUnit === 'pc' && amountValue && amountValue > 0 ? amountValue : 1;
+  return { ore: Math.round(unitPriceOre / count), per: 'st' };
 }
 
 /** "1,5 l", "330 ml", "500 g", "6 st" */
@@ -55,6 +87,17 @@ export function normalizeAmountFields(amountValue: unknown, amountUnit: unknown)
     return { ok: false, error: `Amount unit must be one of: ${AMOUNT_UNITS.join(', ')}` };
   }
   return { ok: true, value, unit: amountUnit as AmountUnit };
+}
+
+type BasisField =
+  | { ok: true; value: ComparisonBasis | null }
+  | { ok: false; error: string };
+
+/** Validate a comparisonBasis from an API request body. '' / null = auto. */
+export function normalizeComparisonBasis(value: unknown): BasisField {
+  if (value == null || value === '') return { ok: true, value: null };
+  if (value === 'unit' || value === 'package') return { ok: true, value };
+  return { ok: false, error: "Comparison basis must be 'unit' or 'package'" };
 }
 
 // "COCA-COLA ZERO 1,5L", "PRINGLES 200G", "PWK 25 CL" → package amount.

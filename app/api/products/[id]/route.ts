@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, sessionUserId } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { db, sqlite } from '@/lib/db';
 import { products } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { priceHistory } from '@/lib/db/queries/prices';
-import { normalizeAmountFields } from '@/lib/units';
+import { normalizeAmountFields, normalizeComparisonBasis } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,6 +66,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     patch.amountValue = amount.value;
     patch.amountUnit = amount.unit;
   }
+  if ('comparisonBasis' in body) {
+    const basis = normalizeComparisonBasis(body.comparisonBasis);
+    if (!basis.ok) return NextResponse.json({ error: basis.error }, { status: 400 });
+    patch.comparisonBasis = basis.value;
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(existing);
@@ -85,4 +90,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
     throw e;
   }
+}
+
+// Delete a product. Receipt items keep their raw text but lose the product
+// link (product_id set to NULL); aliases cascade away. Price history for this
+// product disappears — the underlying receipts are untouched.
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!sessionUserId(session)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const productId = Number(params.id);
+  const existing = db.select().from(products).where(eq(products.id, productId)).get();
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const remove = sqlite.transaction(() => {
+    sqlite.prepare('UPDATE receipt_items SET product_id = NULL WHERE product_id = ?').run(productId);
+    sqlite.prepare('DELETE FROM products WHERE id = ?').run(productId);
+  });
+  remove();
+
+  return NextResponse.json({ ok: true });
 }

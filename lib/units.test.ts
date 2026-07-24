@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { comparisonPriceOre, formatAmount, parseAmountFromText } from './units';
+import { comparisonForBasis, comparisonPriceOre, formatAmount, parseAmountFromText } from './units';
 
 describe('comparisonPriceOre', () => {
   it('converts a 1.5 l bottle price to per liter', () => {
@@ -32,6 +32,38 @@ describe('comparisonPriceOre', () => {
     expect(comparisonPriceOre(941, 0, 'l')).toBeNull();
     expect(comparisonPriceOre(941, 1.5, null)).toBeNull();
     expect(comparisonPriceOre(941, 1.5, 'bogus')).toBeNull();
+  });
+});
+
+describe('comparisonForBasis', () => {
+  it('always reports weight buys per kg', () => {
+    // Loose fruit/veg bought by the kilo → 34.90/kg regardless of basis.
+    expect(comparisonForBasis(3490, 'kg', null, null, null)).toEqual({ ore: 3490, per: 'kg' });
+    expect(comparisonForBasis(3490, 'kg', null, null, 'package')).toEqual({ ore: 3490, per: 'kg' });
+  });
+
+  it('auto: weight/volume package compares per kg/l', () => {
+    // A 500 g bag for 12.90 → 25.80/kg, lining up with loose weight.
+    expect(comparisonForBasis(1290, 'pc', 500, 'g', null)).toEqual({ ore: 2580, per: 'kg' });
+  });
+
+  it('auto: piece-count package compares per st', () => {
+    // A 6-pack for 30.00 → 5.00/st.
+    expect(comparisonForBasis(3000, 'pc', 6, 'pc', null)).toEqual({ ore: 500, per: 'st' });
+  });
+
+  it("basis 'package' forces per st even with a weight amount", () => {
+    // Same 500 g bag, but the user wants the package price, not per kg.
+    expect(comparisonForBasis(1290, 'pc', 500, 'g', 'package')).toEqual({ ore: 1290, per: 'st' });
+  });
+
+  it("basis 'unit' forces per kg/l when a weight amount exists", () => {
+    expect(comparisonForBasis(1290, 'pc', 500, 'g', 'unit')).toEqual({ ore: 2580, per: 'kg' });
+  });
+
+  it("basis 'unit' with no convertible amount yields null", () => {
+    expect(comparisonForBasis(3000, 'pc', 6, 'pc', 'unit')).toBeNull();
+    expect(comparisonForBasis(1290, 'pc', null, null, 'unit')).toBeNull();
   });
 });
 

@@ -144,6 +144,9 @@ export function bootstrapSchema(sqlite: Database.Database): void {
   addColumnIfMissing(sqlite, 'products', 'amount_value REAL');
   addColumnIfMissing(sqlite, 'products', 'amount_unit TEXT');
 
+  // v11: comparison-price basis — per unit (kg/l) vs per package (st)
+  addColumnIfMissing(sqlite, 'products', 'comparison_basis TEXT');
+
   // v5: original name of the uploaded file (e.g. "Kvitto-1.pdf")
   addColumnIfMissing(sqlite, 'receipts', 'original_filename TEXT');
 

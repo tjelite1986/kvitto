@@ -4,7 +4,7 @@ import { authOptions, sessionUserId } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { products } from '@/lib/db/schema';
 import { productsWithLatestPrice } from '@/lib/db/queries/prices';
-import { normalizeAmountFields } from '@/lib/units';
+import { normalizeAmountFields, normalizeComparisonBasis } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,13 +24,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { name, brand, category, amountValue, amountUnit } = await req.json();
+  const { name, brand, category, amountValue, amountUnit, comparisonBasis } = await req.json();
   if (!name || typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'Product name is required' }, { status: 400 });
   }
   const amount = normalizeAmountFields(amountValue, amountUnit);
   if (!amount.ok) {
     return NextResponse.json({ error: amount.error }, { status: 400 });
+  }
+  const basis = normalizeComparisonBasis(comparisonBasis);
+  if (!basis.ok) {
+    return NextResponse.json({ error: basis.error }, { status: 400 });
   }
 
   try {
@@ -42,6 +46,7 @@ export async function POST(req: NextRequest) {
         category: typeof category === 'string' && category.trim() ? category.trim() : null,
         amountValue: amount.value,
         amountUnit: amount.unit,
+        comparisonBasis: basis.value,
       })
       .returning()
       .get();

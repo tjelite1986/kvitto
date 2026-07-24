@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PriceHistoryChart, { type PriceSeries } from '@/components/charts/PriceHistoryChart';
 import { formatKr } from '@/lib/format';
-import { AMOUNT_UNITS, comparisonPriceOre, formatAmount } from '@/lib/units';
+import { AMOUNT_UNITS, comparisonForBasis, formatAmount } from '@/lib/units';
 import ProductCategorySelect from '@/components/ProductCategorySelect';
 
 interface Observation {
@@ -42,26 +42,36 @@ interface ProductDetail {
   category: string | null;
   amountValue: number | null;
   amountUnit: string | null;
+  comparisonBasis: string | null;
   history: Observation[];
   stats: { minOre: number; maxOre: number; avgOre: number } | null;
 }
 
-// "39,90 kr/kg" for weight buys, package-amount comparison for piece buys
+// "39,90 kr/kg" for weight buys, package-amount comparison for piece buys,
+// honouring the product's comparison basis (per kg/l vs per piece).
 function comparisonLabel(product: ProductDetail, obs: Observation): string | null {
-  if (obs.unit === 'kg') return `${formatKr(obs.unitPriceOre)}/kg`;
-  const cmp = comparisonPriceOre(obs.unitPriceOre, product.amountValue, product.amountUnit);
+  const cmp = comparisonForBasis(
+    obs.unitPriceOre,
+    obs.unit,
+    product.amountValue,
+    product.amountUnit,
+    product.comparisonBasis as 'unit' | 'package' | null
+  );
   return cmp ? `${formatKr(cmp.ore)}/${cmp.per}` : null;
 }
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [product, setProduct] = useState<ProductDetail | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [storeFilter, setStoreFilter] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
-  const [form, setForm] = useState({ name: '', brand: '', category: '', amountValue: '', amountUnit: '' });
+  const [form, setForm] = useState({ name: '', brand: '', category: '', amountValue: '', amountUnit: '', comparisonBasis: '' });
   const [aliases, setAliases] = useState<ProductAlias[]>([]);
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([]);
   const [aliasText, setAliasText] = useState('');
@@ -118,6 +128,7 @@ export default function ProductDetailPage() {
       category: product.category ?? '',
       amountValue: product.amountValue != null ? String(product.amountValue) : '',
       amountUnit: product.amountUnit ?? '',
+      comparisonBasis: product.comparisonBasis ?? '',
     });
     setEditError('');
     setEditing(true);
@@ -135,6 +146,7 @@ export default function ProductDetailPage() {
         category: form.category.trim() || null,
         amountValue: form.amountValue.trim() ? Number(form.amountValue.replace(',', '.')) : null,
         amountUnit: form.amountUnit || null,
+        comparisonBasis: form.comparisonBasis || null,
       }),
     });
     setSaving(false);
@@ -154,6 +166,18 @@ export default function ProductDetailPage() {
       .then(setProduct)
       .catch(() => setError('Could not load the product.'));
   }, [params.id]);
+
+  async function deleteProduct() {
+    setDeleting(true);
+    const res = await fetch(`/api/products/${params.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      router.push('/products');
+    } else {
+      setDeleting(false);
+      setConfirmDelete(false);
+      setError('Could not delete the product.');
+    }
+  }
 
   const storeNames = useMemo(() => {
     if (!product) return [];
@@ -203,14 +227,47 @@ export default function ProductDetailPage() {
           )}
         </div>
         {!editing && (
-          <button
-            onClick={startEdit}
-            className="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-200 shrink-0"
-          >
-            Edit
-          </button>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={startEdit}
+              className="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-200"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-sm bg-gray-100 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50"
+            >
+              Delete
+            </button>
+          </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <div className="bg-white rounded-lg shadow p-4 space-y-3 border border-red-200">
+          <p className="text-sm text-gray-700">
+            Delete <span className="font-medium">{product.name}</span>? Its receipt-name
+            aliases and price history are removed. The receipts themselves stay, but
+            their items lose the link to this product. This cannot be undone.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={deleteProduct}
+              disabled={deleting}
+              className="bg-red-600 text-white text-sm px-4 py-1.5 rounded-md hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting...' : 'Delete product'}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-sm text-gray-500 hover:text-gray-700 px-2"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div className="bg-white rounded-lg shadow p-4 space-y-3">
@@ -260,6 +317,18 @@ export default function ProductDetailPage() {
                 {AMOUNT_UNITS.map((u) => (
                   <option key={u} value={u}>{u === 'pc' ? 'st' : u}</option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Compare by</label>
+              <select
+                value={form.comparisonBasis}
+                onChange={(e) => setForm((f) => ({ ...f, comparisonBasis: e.target.value }))}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+              >
+                <option value="">Auto</option>
+                <option value="unit">Per kg/l</option>
+                <option value="package">Per piece (st)</option>
               </select>
             </div>
           </div>
@@ -400,7 +469,7 @@ export default function ProductDetailPage() {
                 <th className="px-4 py-2 font-medium">Store</th>
                 <th className="px-4 py-2 font-medium text-right">Qty</th>
                 <th className="px-4 py-2 font-medium text-right">Unit price</th>
-                <th className="px-4 py-2 font-medium text-right">Per kg/l</th>
+                <th className="px-4 py-2 font-medium text-right">Comparison</th>
                 <th className="px-4 py-2 font-medium text-right">Offer</th>
                 <th className="px-4 py-2 font-medium text-right">Pant</th>
                 <th className="px-4 py-2 font-medium text-right">Discount</th>

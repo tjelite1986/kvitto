@@ -114,6 +114,12 @@ export const products = sqliteTable('products', {
   // comparison price (jämförpris) per kg/l — see lib/units.ts.
   amountValue: real('amount_value'),
   amountUnit: text('amount_unit', { enum: ['g', 'hg', 'kg', 'ml', 'cl', 'l', 'pc'] }),
+  // How the comparison price (jämförpris) is expressed. 'unit' = per kg/l
+  // (normalized from the package weight/volume — fruit & veg, so a packaged
+  // and a loose-weight buy line up, e.g. 34,90/kg). 'package' = per piece
+  // (kr/st, dividing a multipack by its count). NULL = auto: weight/volume
+  // amounts compare per kg/l, piece amounts per st.
+  comparisonBasis: text('comparison_basis', { enum: ['unit', 'package'] }),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
