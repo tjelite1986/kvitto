@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ScanDialog from '@/components/dialogs/ScanDialog';
 import { formatKr, statusBadge } from '@/lib/format';
-import { channelLabel } from '@/lib/store-categories';
+import { channelLabel, STORE_CHANNELS } from '@/lib/store-categories';
 
 interface ReceiptRow {
   id: number;
@@ -23,6 +23,8 @@ export default function ReceiptsPage() {
   const [loading, setLoading] = useState(true);
   const [scanOpen, setScanOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  // Client-side channel filter. null = all; NONE = receipts without a channel.
+  const [channelFilter, setChannelFilter] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/receipts')
@@ -52,6 +54,20 @@ export default function ReceiptsPage() {
     }
   }
 
+  // Which channels are present, so the filter only appears when it is useful.
+  const NONE = ' none'; // sentinel chip for receipts with no channel
+  const presentChannels = STORE_CHANNELS.filter((c) =>
+    receipts.some((r) => r.channel === c.value)
+  );
+  const hasUnspecified = receipts.some((r) => !r.channel);
+  const showChannelFilter = presentChannels.length > 0 && receipts.length > 1;
+  const filteredReceipts =
+    channelFilter == null
+      ? receipts
+      : channelFilter === NONE
+        ? receipts.filter((r) => !r.channel)
+        : receipts.filter((r) => r.channel === channelFilter);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -64,6 +80,28 @@ export default function ReceiptsPage() {
         </button>
       </div>
 
+      {showChannelFilter && (
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: null as string | null, label: 'All' },
+            ...presentChannels.map((c) => ({ key: c.value as string, label: c.label })),
+            ...(hasUnspecified ? [{ key: NONE, label: 'No channel' }] : []),
+          ].map((chip) => (
+            <button
+              key={chip.key ?? 'all'}
+              onClick={() => setChannelFilter(chip.key)}
+              className={`text-xs px-3 py-1 rounded-full border ${
+                channelFilter === chip.key
+                  ? 'bg-green-600 text-white border-green-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-green-400'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow">
         {loading ? (
           <p className="px-6 py-8 text-sm text-gray-400 text-center">Loading...</p>
@@ -71,9 +109,13 @@ export default function ReceiptsPage() {
           <p className="px-6 py-8 text-sm text-gray-400 text-center">
             No receipts yet. Scan your first one!
           </p>
+        ) : filteredReceipts.length === 0 ? (
+          <p className="px-6 py-8 text-sm text-gray-400 text-center">
+            No receipts match this filter.
+          </p>
         ) : (
           <ul className="divide-y divide-gray-100">
-            {receipts.map((r) => (
+            {filteredReceipts.map((r) => (
               <li key={r.id}>
                 <Link
                   href={r.status === 'confirmed' ? `/receipts/${r.id}` : `/receipts/${r.id}/review`}
