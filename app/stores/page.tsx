@@ -81,16 +81,23 @@ export default function StoresPage() {
     }
   }
 
-  // Persist a channel/category change for an existing store, optimistically.
+  // Persist a channel/category change for an existing store, optimistically —
+  // but reload on failure so the UI never keeps showing a value that was
+  // never saved.
   async function updateStore(storeId: number, patch: { channel?: string | null; category?: string | null }) {
     setStoresList((prev) =>
       prev.map((s) => (s.id === storeId ? { ...s, ...patch } : s))
     );
-    await fetch(`/api/stores/${storeId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    }).catch(() => {});
+    try {
+      const res = await fetch(`/api/stores/${storeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) setRefresh((n) => n + 1);
+    } catch {
+      setRefresh((n) => n + 1);
+    }
   }
 
   async function toggleExpand(storeId: number) {

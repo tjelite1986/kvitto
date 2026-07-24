@@ -213,15 +213,20 @@ export function decayOverriddenAliases(
     );
     if (!match || match.productId === prev.productId) continue;
 
-    // The pre-linked product was changed — decay the alias that caused it
+    // The pre-linked product was changed — decay the alias that caused it.
+    // The pre-link falls back to a GLOBAL (NULL-store) alias, so match both
+    // the receipt's store and the global row; requiring storeId equality
+    // would leave a wrong global alias at confidence 1 forever.
     const aliasText = normalizeAlias(prev.rawText);
-    const alias = db
+    const aliases = db
       .select()
       .from(productAliases)
       .where(eq(productAliases.aliasText, aliasText))
       .all()
-      .find((a) => a.storeId === storeId && a.productId === prev.productId);
-    if (alias) {
+      .filter(
+        (a) => (a.storeId === storeId || a.storeId === null) && a.productId === prev.productId
+      );
+    for (const alias of aliases) {
       db.update(productAliases)
         .set({ confidence: alias.confidence * ALIAS_DECAY })
         .where(eq(productAliases.id, alias.id))

@@ -113,17 +113,26 @@ export default function AdminPage() {
 
     const form = e.currentTarget;
     const formData = new FormData(form);
-    const res = await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: formData.get('name'),
-        email: formData.get('email'),
-        password: formData.get('password'),
-        role: formData.get('role'),
-      }),
-    });
-    const data = await res.json();
+    let res: Response;
+    let data: { error?: string; email?: string };
+    try {
+      res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.get('name'),
+          email: formData.get('email'),
+          password: formData.get('password'),
+          role: formData.get('role'),
+        }),
+      });
+      // proxy errors (502/504) return HTML — never let .json() throw unhandled
+      data = await res.json().catch(() => ({}));
+    } catch {
+      setSaving(false);
+      setError('Could not reach the server.');
+      return;
+    }
     setSaving(false);
 
     if (!res.ok) {

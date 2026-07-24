@@ -92,7 +92,7 @@ export default function HomePage() {
             ) : (
               <ul className="space-y-1">
                 {stats.priceChanges.map((change) => (
-                  <li key={`${change.productId}-${change.storeName}`} className="flex items-center justify-between text-sm">
+                  <li key={`${change.productId}-${change.storeName}-${change.currency}`} className="flex items-center justify-between text-sm">
                     <Link href={`/products/${change.productId}`} className="truncate hover:underline">
                       {change.productName}
                       <span className="text-gray-400 text-xs ml-1">({change.storeName})</span>

@@ -12,6 +12,7 @@ if (!fs.existsSync(dbDir)) {
 
 const dbPath = process.argv[2] ?? path.join(dbDir, 'kvitto.db');
 const sqlite = new Database(dbPath);
+sqlite.pragma('busy_timeout = 5000');
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
 

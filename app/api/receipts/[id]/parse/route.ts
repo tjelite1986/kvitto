@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, sessionUserId } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { db, sqlite } from '@/lib/db';
 import { receipts, receiptItems, productAliases } from '@/lib/db/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { getOwnedReceipt } from '@/lib/receipts';
@@ -22,6 +22,11 @@ export const maxDuration = 120;
 
 const BBOX_MATCH_THRESHOLD = 0.6;
 const ALIAS_MIN_CONFIDENCE = 0.9;
+
+// Receipts with a parse currently awaited in THIS process. A receipt stuck in
+// 'processing' without an entry here is an orphan from a crashed/restarted
+// server and may be re-parsed.
+const inFlight = new Set<number>();
 
 // mode: 'auto'   — local parser first when the store is known; AI as fallback
 //       'local'  — local parser only, never calls the API
@@ -44,10 +49,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (receipt.status === 'confirmed') {
     return NextResponse.json({ error: 'Receipt is already confirmed' }, { status: 400 });
   }
-  if (receipt.status === 'processing') {
+  if (inFlight.has(receipt.id)) {
     return NextResponse.json({ error: 'Parse already in progress' }, { status: 409 });
   }
+  // status 'processing' without an in-flight parse = orphaned by a restart;
+  // fall through and re-parse it.
 
+  inFlight.add(receipt.id);
   db.update(receipts)
     .set({ status: 'processing', errorMessage: null })
     .where(eq(receipts.id, receipt.id))
@@ -73,15 +81,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Manual mode: OCR only — the user builds the items via word taps
     if (mode === 'manual') {
-      db.delete(receiptItems).where(eq(receiptItems.receiptId, receipt.id)).run();
-      db.update(receipts)
-        .set({
-          storeId: detection?.storeId ?? null,
-          claudeRaw: JSON.stringify({ parser: 'manual', detection }),
-          status: 'pending_review',
-        })
-        .where(eq(receipts.id, receipt.id))
-        .run();
+      const manualPersisted = sqlite.transaction(() => {
+        const current = db.select().from(receipts).where(eq(receipts.id, receipt.id)).get();
+        if (!current || current.status === 'confirmed') return false;
+        db.delete(receiptItems).where(eq(receiptItems.receiptId, receipt.id)).run();
+        db.update(receipts)
+          .set({
+            storeId: detection?.storeId ?? null,
+            claudeRaw: JSON.stringify({ parser: 'manual', detection }),
+            status: 'pending_review',
+          })
+          .where(eq(receipts.id, receipt.id))
+          .run();
+        return true;
+      })();
+      if (!manualPersisted) {
+        return NextResponse.json(
+          { error: 'Receipt was confirmed while parsing; parse result discarded.' },
+          { status: 409 }
+        );
+      }
       return NextResponse.json({
         status: 'pending_review',
         parser: 'manual',
@@ -186,27 +205,40 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       };
     });
 
-    // Step 6: persist result
-    db.delete(receiptItems).where(eq(receiptItems.receiptId, receipt.id)).run();
-    for (const item of itemsToInsert) {
-      db.insert(receiptItems).values(item).run();
+    // Step 6: persist result — atomically, and only if the receipt was not
+    // confirmed while the parse was awaiting OCR/Claude (the user may have
+    // finished a manual review in the meantime; their data wins).
+    const persisted = sqlite.transaction(() => {
+      const current = db.select().from(receipts).where(eq(receipts.id, receipt.id)).get();
+      if (!current || current.status === 'confirmed') return false;
+      db.delete(receiptItems).where(eq(receiptItems.receiptId, receipt.id)).run();
+      for (const item of itemsToInsert) {
+        db.insert(receiptItems).values(item).run();
+      }
+      db.update(receipts)
+        .set({
+          storeId: detection?.storeId ?? null,
+          purchaseDate: parsed.purchase_date,
+          purchaseTime: parsed.purchase_time,
+          receiptNumber: parsed.receipt_number ?? null,
+          currency: coerceCurrency(parsed.currency),
+          totalOre: parsed.total_ore,
+          pantReturnOre,
+          deliveryFeeOre,
+          serviceFeeOre,
+          claudeRaw: JSON.stringify({ parsed, totalMismatch, detection, parser }),
+          status: 'pending_review',
+        })
+        .where(eq(receipts.id, receipt.id))
+        .run();
+      return true;
+    })();
+    if (!persisted) {
+      return NextResponse.json(
+        { error: 'Receipt was confirmed while parsing; parse result discarded.' },
+        { status: 409 }
+      );
     }
-    db.update(receipts)
-      .set({
-        storeId: detection?.storeId ?? null,
-        purchaseDate: parsed.purchase_date,
-        purchaseTime: parsed.purchase_time,
-        receiptNumber: parsed.receipt_number ?? null,
-        currency: coerceCurrency(parsed.currency),
-        totalOre: parsed.total_ore,
-        pantReturnOre,
-        deliveryFeeOre,
-        serviceFeeOre,
-        claudeRaw: JSON.stringify({ parsed, totalMismatch, detection, parser }),
-        status: 'pending_review',
-      })
-      .where(eq(receipts.id, receipt.id))
-      .run();
 
     const items = db
       .select()
@@ -229,13 +261,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
   } catch (e) {
     console.error('Receipt parse failed:', e);
-    db.update(receipts)
-      .set({
-        status: 'failed',
-        errorMessage: e instanceof Error ? e.message : 'Unknown parse error',
-      })
-      .where(eq(receipts.id, receipt.id))
-      .run();
+    // Never clobber a receipt the user confirmed while this parse was running.
+    const current = db.select().from(receipts).where(eq(receipts.id, receipt.id)).get();
+    if (current && current.status !== 'confirmed') {
+      db.update(receipts)
+        .set({
+          status: 'failed',
+          errorMessage: e instanceof Error ? e.message : 'Unknown parse error',
+        })
+        .where(eq(receipts.id, receipt.id))
+        .run();
+    }
     return NextResponse.json({ error: 'Parse failed. You can retry.' }, { status: 500 });
+  } finally {
+    inFlight.delete(receipt.id);
   }
 }

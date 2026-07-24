@@ -42,13 +42,21 @@ export default function LoginPage() {
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
 
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, confirmPassword }),
-    });
-
-    const data = await res.json();
+    let res: Response;
+    let data: { error?: string };
+    try {
+      res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, confirmPassword }),
+      });
+      // proxy errors (502/504) return HTML — never let .json() throw unhandled
+      data = await res.json().catch(() => ({}));
+    } catch {
+      setError('Could not reach the server.');
+      setLoading(false);
+      return;
+    }
 
     if (!res.ok) {
       setError(data.error || 'Something went wrong');

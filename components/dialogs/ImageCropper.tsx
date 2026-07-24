@@ -45,11 +45,17 @@ export default function ImageCropper({ src, onCancel, onCrop }: ImageCropperProp
     startCrop: CropRect;
   } | null>(null);
 
+  // Display size the current crop rect was placed against. The rect is in
+  // display pixels, so it must be rescaled when the image is re-laid-out
+  // (phone rotation, window resize) or applyCrop maps the wrong region.
+  const displaySize = useRef<{ w: number; h: number } | null>(null);
+
   // Start with a slight inset so the crop rect is visibly adjustable
   const initCrop = useCallback(() => {
     const img = imgRef.current;
     if (!img) return;
     const inset = 0.04;
+    displaySize.current = { w: img.clientWidth, h: img.clientHeight };
     setCrop({
       x: img.clientWidth * inset,
       y: img.clientHeight * inset,
@@ -62,6 +68,31 @@ export default function ImageCropper({ src, onCancel, onCrop }: ImageCropperProp
     const img = imgRef.current;
     if (img?.complete && img.clientWidth > 0) initCrop();
   }, [initCrop, src]);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    const observer = new ResizeObserver(() => {
+      const w = img.clientWidth;
+      const h = img.clientHeight;
+      if (!w || !h) return;
+      const prev = displaySize.current;
+      displaySize.current = { w, h };
+      if (!prev || (prev.w === w && prev.h === h)) return;
+      setCrop((c) =>
+        c
+          ? {
+              x: (c.x * w) / prev.w,
+              y: (c.y * h) / prev.h,
+              w: (c.w * w) / prev.w,
+              h: (c.h * h) / prev.h,
+            }
+          : c
+      );
+    });
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, [src]);
 
   function hitTest(px: number, py: number, rect: CropRect): DragMode | null {
     const nearLeft = Math.abs(px - rect.x) < HANDLE_HIT;

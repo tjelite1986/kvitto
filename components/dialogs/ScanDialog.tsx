@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ImageCropper from './ImageCropper';
 
@@ -21,10 +21,28 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [cropMode, setCropMode] = useState(false);
+  // Guards the async PDF sniff: picking a second file quickly must not let the
+  // first file's slower sniff result land on the new selection.
+  const selectSeq = useRef(0);
+  const uploadingRef = useRef(false);
+  uploadingRef.current = uploading;
+
+  // Close on Escape — but never mid-upload (closing would hide a POST that
+  // still completes and creates the receipt).
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !uploadingRef.current) close();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
   async function selectFile(f: File) {
+    const seq = ++selectSeq.current;
     setError('');
     setFile(f);
     setPreviewFailed(false);
@@ -35,9 +53,9 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
     // MIME type and no file extension.
     try {
       const head = await f.slice(0, 5).text();
-      setIsPdf(head === '%PDF-');
+      if (seq === selectSeq.current) setIsPdf(head === '%PDF-');
     } catch {
-      setIsPdf(false);
+      if (seq === selectSeq.current) setIsPdf(false);
     }
   }
 
@@ -75,6 +93,7 @@ export default function ScanDialog({ open, onClose }: ScanDialogProps) {
   }
 
   function close() {
+    if (uploading) return; // the POST would still complete and create a receipt
     reset();
     onClose();
   }

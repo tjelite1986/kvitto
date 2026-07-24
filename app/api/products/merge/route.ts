@@ -80,10 +80,16 @@ export async function POST(req: NextRequest) {
       }
 
       // Keep the merged product's own name as a global alias so a future
-      // receipt printed with that name still links to the target.
+      // receipt printed with that name still links to the target. NULL store
+      // rows bypass the unique index, so also check the whole table — another
+      // product may already own this global alias, and a duplicate would make
+      // future auto-linking nondeterministic.
       const nameAlias = normalizeAlias(source.name);
       if (nameAlias && !seen.has(key(null, nameAlias))) {
-        insertAlias.run(targetId, nameAlias);
+        const globalExists = sqlite
+          .prepare('SELECT 1 FROM product_aliases WHERE store_id IS NULL AND alias_text = ?')
+          .get(nameAlias);
+        if (!globalExists) insertAlias.run(targetId, nameAlias);
         seen.add(key(null, nameAlias));
       }
 

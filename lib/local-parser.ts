@@ -37,13 +37,17 @@ const QTY_RE = /(\d+)\s*ST\s*[xX*+]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
 // Weight lines are usually per kg; hectogram lines (lösgodis) are converted
 // to kg on parse (qty / 10, unit price x 10) so everything is stored per kg.
 const WEIGHT_RE = /(\d+\s?[,.]\s?\d{1,3})\s*(KG|HG)\s*[xX*+]\s*(\d{1,5})\s?[,.]\s?(\d{2})/i;
-const MONEY_TOKEN_RE = /-?\s?\d{1,5}\s?[,.]\s?\d{2}(?!\d)/g;
+// Kronor part is either space/dot-grouped thousands ("1 234", "1.234") or a
+// plain digit run — without the grouped alternative, "1 234,00" silently
+// truncates to "234,00" on BOTH the item and the TOTALT line, so the checksum
+// still passes and a wrong total gets stored as trusted.
+const MONEY_TOKEN_RE = /-?\s?(?:\d{1,3}(?:[\s.]\d{3})+|\d{1,5})\s?[,.]\s?\d{2}(?!\d)/g;
 const DASHED_RE = /^[-—_=* ]{6,}$/;
 
 function tokenToOre(token: string): { ore: number; negative: boolean } {
   const negative = token.includes('-');
-  const m = token.match(/(\d{1,5})\s?[,.]\s?(\d{2})/)!;
-  return { ore: Number(m[1]) * 100 + Number(m[2]), negative };
+  const m = token.match(/(\d(?:[\d\s.]*\d)?)\s?[,.]\s?(\d{2})$/)!;
+  return { ore: Number(m[1].replace(/\D/g, '')) * 100 + Number(m[2]), negative };
 }
 
 /** Last money token on the line, or null. */
@@ -53,12 +57,25 @@ function lastMoney(text: string): { ore: number; negative: boolean } | null {
   return tokenToOre(tokens[tokens.length - 1]);
 }
 
+/** Last money token that starts at or after `pos`, or null. Used to find a
+ * line's trailing total while ignoring the unit price inside a qty/weight
+ * pattern ("2 st x 12,90" has no trailing total — 12,90 is the unit price). */
+function lastMoneyAfter(text: string, pos: number): { ore: number; negative: boolean } | null {
+  let last: RegExpMatchArray | null = null;
+  for (const m of text.matchAll(MONEY_TOKEN_RE)) {
+    if ((m.index ?? 0) >= pos) last = m;
+  }
+  return last ? tokenToOre(last[0]) : null;
+}
+
 function stripMoneyAndNoise(text: string): string {
+  // Strip the composite patterns BEFORE bare money tokens — they embed the
+  // price, so stripping money first leaves "2 for" / "2st*" junk in the name.
   return text
-    .replace(MONEY_TOKEN_RE, ' ')
     .replace(OFFER_RE, ' ')
     .replace(QTY_RE, ' ')
     .replace(WEIGHT_RE, ' ')
+    .replace(MONEY_TOKEN_RE, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[*+\-\s]+/, '') // bonus/pant markers like "* " or "+"
     .trim();
@@ -91,12 +108,12 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
   let deliveryFeeOre = 0;
   let serviceFeeOre = 0;
   let pendingName: { name: string; line: string } | null = null;
-  let itemsEnded = false;
+  let totalSeen = false;
+  let totalIsStrong = false;
 
   const prev = () => (items.length > 0 ? items[items.length - 1] : null);
 
   for (const line of lines) {
-    if (itemsEnded) break;
     const text = line.trim();
     if (!text || DASHED_RE.test(text)) {
       continue;
@@ -104,12 +121,24 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
 
     const money = lastMoney(text);
 
-    // Grand total ends the item section
+    // Total line ends the item section. Some receipts print a SUMMA subtotal
+    // followed by rounding and the actually-paid "ATT BETALA" — a strong label
+    // (TOTALT / ATT BETALA / TOTAL) always beats SUMMA, and a later total line
+    // overrides an earlier weak one.
     if (TOTAL_RE.test(text) && money && !money.negative) {
-      totalOre = money.ore;
-      itemsEnded = true;
+      const strong = /\b(TOTALT|ATT\s+BETALA|TOTAL)\b/i.test(text);
+      if (strong) {
+        totalOre = money.ore;
+        totalIsStrong = true;
+      } else if (!totalIsStrong) {
+        totalOre = money.ore;
+      }
+      totalSeen = true;
       continue;
     }
+    // After the totals section only later total lines matter — rounding and
+    // payment lines must not fold into the last item as a discount.
+    if (totalSeen) continue;
 
     if (SKIP_RE.test(text)) continue;
 
@@ -136,12 +165,25 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
       continue;
     }
 
-    // PANT: surcharge on the previous item, never an item of its own
+    // PANT: surcharge on the previous item, never an item of its own.
+    // "PANT 4 st x 1,00" carries no trailing total — the money token is the
+    // unit price, so the surcharge is count x price.
     if (PANT_RE.test(text)) {
       const target = prev();
-      if (target && money) {
-        target.pant_ore += Math.abs(money.ore);
-        target.source_lines.push(text);
+      if (target) {
+        const pantQty = text.match(QTY_RE);
+        const trailing = pantQty
+          ? lastMoneyAfter(text, (pantQty.index ?? 0) + pantQty[0].length)
+          : money;
+        const ore = trailing
+          ? Math.abs(trailing.ore)
+          : pantQty
+            ? Number(pantQty[1]) * (Number(pantQty[2]) * 100 + Number(pantQty[3]))
+            : null;
+        if (ore != null) {
+          target.pant_ore += ore;
+          target.source_lines.push(text);
+        }
       }
       pendingName = null;
       continue;
@@ -191,9 +233,13 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
         item = prev();
       }
       if (item) {
+        // Only a money token AFTER the qty pattern is the printed line total —
+        // lastMoney(text) would find the unit price inside the pattern itself.
+        const trailing = lastMoneyAfter(text, (qty.index ?? 0) + qty[0].length);
         item.qty = count;
         item.unit_price_ore = unitPrice;
-        item.line_total_ore = money && !money.negative ? money.ore : unitPrice * count;
+        item.line_total_ore =
+          trailing && !trailing.negative ? trailing.ore : unitPrice * count;
         item.source_lines.push(text);
       }
       pendingName = null;
@@ -220,11 +266,12 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
         item = prev();
       }
       if (item) {
+        const trailing = lastMoneyAfter(text, (weight.index ?? 0) + weight[0].length);
         item.qty = kg;
         item.unit = 'kg';
         item.unit_price_ore = perKg;
         item.line_total_ore =
-          money && !money.negative ? money.ore : Math.round(kg * perKg);
+          trailing && !trailing.negative ? trailing.ore : Math.round(kg * perKg);
         item.source_lines.push(text);
       }
       pendingName = null;
@@ -292,10 +339,12 @@ export function parseLocally(ocr: OcrResult): LocalParseResult {
     return sum + effective - item.discount_ore + item.pant_ore;
   }, 0);
 
+  // Öre-EXACT by contract (see file header and CLAUDE.md): every line total is
+  // read from print, so any slack would let an off-by-one misparse through.
   const checksumOk =
     totalOre != null &&
     cleaned.length > 0 &&
-    Math.abs(computedSum + deliveryFeeOre + serviceFeeOre - pantReturnOre - totalOre) <= 1;
+    computedSum + deliveryFeeOre + serviceFeeOre - pantReturnOre === totalOre;
 
   return {
     parsed: {

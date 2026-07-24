@@ -64,7 +64,10 @@ const OBSERVATIONS_CTE = `
   obs AS (
     SELECT raw.*,
       ROW_NUMBER() OVER (
-        PARTITION BY product_id, store_id, currency
+        -- unit is part of the series key: a per-kg price and a per-piece price
+        -- for the same product are different quantities and must never be
+        -- compared as a trend (39,90/kg vs 12,90/pc is not a price drop).
+        PARTITION BY product_id, store_id, currency, unit
         ORDER BY purchase_date DESC, receipt_id DESC, manual_price_id DESC
       ) AS rn
     FROM raw
@@ -131,6 +134,7 @@ export function productsWithLatestPrice(search?: string): ProductListEntry[] {
          ON prev.product_id = latest.product_id
         AND prev.store_id = latest.store_id
         AND prev.currency = latest.currency
+        AND prev.unit = latest.unit
         AND prev.rn = 2
        WHERE latest.rn = 1`
     )
@@ -249,6 +253,7 @@ export function biggestPriceChanges(limit: number): PriceChange[] {
          ON prev.product_id = latest.product_id
         AND prev.store_id = latest.store_id
         AND prev.currency = latest.currency
+        AND prev.unit = latest.unit
         AND prev.rn = 2
        JOIN products p ON p.id = latest.product_id
        WHERE latest.rn = 1

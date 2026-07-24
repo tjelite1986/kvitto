@@ -252,3 +252,77 @@ describe('parseLocally — checksum failure', () => {
     expect(checksumOk).toBe(false);
   });
 });
+
+describe('parseLocally — thousands separators', () => {
+  it('reads space-grouped thousands on item and total lines', () => {
+    const lines = ['ELGIGANTEN', 'TV SAMSUNG 55 1 234,00', 'TOTALT 1 234,00'];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(parsed.total_ore).toBe(123400);
+    expect(parsed.items[0].line_total_ore).toBe(123400);
+    expect(parsed.items[0].name).toBe('TV SAMSUNG 55');
+    expect(checksumOk).toBe(true);
+  });
+
+  it('reads dot-grouped thousands', () => {
+    const lines = ['STORE', 'SOFFA 12.499,00', 'TOTALT 12.499,00'];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(parsed.total_ore).toBe(1249900);
+    expect(checksumOk).toBe(true);
+  });
+});
+
+describe('parseLocally — qty/weight lines without a trailing total', () => {
+  it('computes the line total as count x unit price', () => {
+    const lines = ['KAFFE GEVALIA', '2 st x 12,90', 'TOTALT 25,80'];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(parsed.items[0].line_total_ore).toBe(2580);
+    expect(checksumOk).toBe(true);
+  });
+
+  it('computes a weight line total as kg x price per kg', () => {
+    const lines = ['BANANER', '0,812 kg x 14,90', 'TOTALT 12,10'];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(parsed.items[0].line_total_ore).toBe(1210);
+    expect(checksumOk).toBe(true);
+  });
+
+  it('computes a pant surcharge as count x unit price', () => {
+    const lines = ['COCA COLA 20,00', 'PANT 4 st x 1,00', 'TOTALT 24,00'];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(parsed.items[0].pant_ore).toBe(400);
+    expect(checksumOk).toBe(true);
+  });
+});
+
+describe('parseLocally — subtotal vs paid total', () => {
+  it('prefers ATT BETALA over an earlier SUMMA subtotal', () => {
+    const lines = ['MJOLK 15,50', 'SUMMA 15,50', 'AVRUNDNING -0,50', 'ATT BETALA 15,00'];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(parsed.total_ore).toBe(1500);
+    // rounding makes the item sum differ from the paid total → not trusted
+    expect(checksumOk).toBe(false);
+  });
+
+  it('does not fold post-total rounding into the last item as a discount', () => {
+    const lines = ['MJOLK 15,50', 'SUMMA 15,50', 'AVRUNDNING -0,50', 'ATT BETALA 15,00'];
+    const { parsed } = parseLocally(ocrFromLines(lines));
+    expect(parsed.items[0].discount_ore).toBe(0);
+  });
+
+  it('still uses SUMMA when it is the only total line', () => {
+    const lines = ['MJOLK 15,50', 'SUMMA 15,50'];
+    const { parsed, checksumOk } = parseLocally(ocrFromLines(lines));
+    expect(parsed.total_ore).toBe(1550);
+    expect(checksumOk).toBe(true);
+  });
+});
+
+describe('parseLocally — item name cleanup', () => {
+  it('strips an inline offer pattern from the item name', () => {
+    const lines = ['GODIS LOSVIKT 2 for 45,00 45,00', 'TOTALT 45,00'];
+    const { parsed } = parseLocally(ocrFromLines(lines));
+    expect(parsed.items[0].name).toBe('GODIS LOSVIKT');
+    expect(parsed.items[0].offer_qty).toBe(2);
+    expect(parsed.items[0].offer_total_ore).toBe(4500);
+  });
+});

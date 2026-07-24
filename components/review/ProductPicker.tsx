@@ -54,15 +54,21 @@ export default function ProductPicker({
   useEffect(() => {
     if (!open) return;
     setLoading(true);
+    // The stale flag drops out-of-order responses so a slow fetch for an older
+    // query can't replace the options list (and cause linking the wrong product).
+    let stale = false;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       fetch(`/api/products?q=${encodeURIComponent(query)}`)
         .then((r) => r.json())
-        .then((data) => Array.isArray(data) && setOptions(data.map((p) => ({ id: p.id, name: p.name }))))
+        .then((data) => !stale && Array.isArray(data) && setOptions(data.map((p) => ({ id: p.id, name: p.name }))))
         .catch(() => {})
-        .finally(() => setLoading(false));
+        .finally(() => !stale && setLoading(false));
     }, 250);
-    return () => clearTimeout(debounceRef.current);
+    return () => {
+      stale = true;
+      clearTimeout(debounceRef.current);
+    };
   }, [query, open]);
 
   // Lock body scroll and close on Escape while the modal is open.

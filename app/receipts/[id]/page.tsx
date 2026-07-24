@@ -122,10 +122,15 @@ export default function ReceiptDetailPage() {
               imageWidth={receipt.imageWidth}
               imageHeight={receipt.imageHeight}
               words={[]}
-              items={receipt.items.map((item, index) => ({
-                index,
-                bbox: item.bbox ? JSON.parse(item.bbox) : null,
-              }))}
+              items={receipt.items.map((item, index) => {
+                let bbox = null;
+                try {
+                  bbox = item.bbox ? JSON.parse(item.bbox) : null;
+                } catch {
+                  // one malformed bbox must not crash the whole page
+                }
+                return { index, bbox };
+              })}
               selectedIndex={selectedIndex}
               onWordTap={() => {}}
               onItemTap={setSelectedIndex}

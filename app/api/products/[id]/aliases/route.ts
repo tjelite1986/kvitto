@@ -51,6 +51,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Alias text is required' }, { status: 400 });
   }
   const storeId = typeof body.storeId === 'number' ? body.storeId : null;
+  if (storeId != null && !db.select().from(stores).where(eq(stores.id, storeId)).get()) {
+    return NextResponse.json({ error: 'Unknown store' }, { status: 400 });
+  }
 
   // NULL store ids bypass the unique index, so match in JS instead of SQL.
   // An existing alias (even for another product) is retargeted to this one.

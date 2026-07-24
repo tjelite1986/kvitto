@@ -20,8 +20,10 @@ export default function PwaInstallBanner() {
     // User dismissed the banner earlier
     if (localStorage.getItem(DISMISSED_KEY)) return;
 
+    // iPadOS 13+ reports "Macintosh" in the UA — detect it via touch support.
     const isIos =
-      /iphone|ipad|ipod/i.test(navigator.userAgent) &&
+      (/iphone|ipad|ipod/i.test(navigator.userAgent) ||
+        (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) &&
       !(window.navigator as Navigator & { standalone?: boolean }).standalone;
 
     if (isIos) {
@@ -47,10 +49,11 @@ export default function PwaInstallBanner() {
   const install = async () => {
     if (!deferredPrompt) return;
     await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setState('hidden');
-    }
+    // The prompt event is single-use: after a dismissal the Install button
+    // would be dead until reload, so hide the banner on both outcomes (without
+    // persisting the dismissal — it may come back next visit).
+    await deferredPrompt.userChoice;
+    setState('hidden');
     setDeferredPrompt(null);
   };
 

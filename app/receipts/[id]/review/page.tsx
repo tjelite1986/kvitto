@@ -4,7 +4,7 @@
 // overlay next to an editable items table, and confirms the result.
 // Word taps assign OCR words to the selected item (name + bounding box).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatMoney, statusBadge } from '@/lib/format';
 import { CURRENCIES, currencySymbol } from '@/lib/currency';
@@ -144,7 +144,9 @@ function oreToInput(ore: number | null): string {
 }
 
 function inputToOre(value: string): number | null {
-  const n = Number(value.replace(',', '.'));
+  const trimmed = value.trim();
+  if (!trimmed) return null; // Number('') is 0 — an empty field must stay null
+  const n = Number(trimmed.replace(',', '.'));
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 
@@ -173,6 +175,27 @@ export default function ReviewPage() {
   // receipt-level field. Marking the store also teaches a keyword rule.
   const [tapTarget, setTapTarget] = useState<'item' | 'store' | 'receiptNo'>('item');
   const [storeKeyword, setStoreKeyword] = useState('');
+  // Per-item numeric fields are stored as öre/numbers, but while a field has
+  // focus the exact typed text must be shown — re-formatting on every
+  // keystroke swallows digits ("55" becomes "5.005" → "5.00").
+  const [editing, setEditing] = useState<{ key: string; text: string } | null>(null);
+  const parseInFlight = useRef(false);
+
+  function editableNumber(
+    key: string,
+    formatted: string,
+    commit: (text: string) => void
+  ) {
+    return {
+      value: editing?.key === key ? editing.text : formatted,
+      onFocus: () => setEditing({ key, text: formatted }),
+      onBlur: () => setEditing(null),
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+        setEditing({ key, text: e.target.value });
+        commit(e.target.value);
+      },
+    };
+  }
 
   const applyReceipt = useCallback((data: ReceiptDetail) => {
     setReceipt(data);
@@ -197,20 +220,29 @@ export default function ReviewPage() {
     async (mode: ParseMode) => {
       setPhase('parsing');
       setError('');
-      const res = await fetch(`/api/receipts/${params.id}/parse`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || 'Parsing failed.');
+      parseInFlight.current = true;
+      try {
+        const res = await fetch(`/api/receipts/${params.id}/parse`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || 'Parsing failed.');
+          setPhase('choice');
+          return;
+        }
+        const detailRes = await fetch(`/api/receipts/${params.id}`);
+        if (!detailRes.ok) throw new Error('detail fetch failed');
+        applyReceipt(await detailRes.json());
+        setPhase('review');
+      } catch {
+        setError('Could not reach the server. Check the connection and retry.');
         setPhase('choice');
-        return;
+      } finally {
+        parseInFlight.current = false;
       }
-      const detail = await fetch(`/api/receipts/${params.id}`).then((r) => r.json());
-      applyReceipt(detail);
-      setPhase('review');
     },
     [params.id, applyReceipt]
   );
@@ -255,6 +287,34 @@ export default function ReviewPage() {
         setPhase('error');
       });
   }, [params.id, applyReceipt]);
+
+  // A receipt loaded in 'processing' state is being parsed elsewhere (another
+  // tab / a reload mid-parse) — or was orphaned by a server restart. Poll until
+  // the status changes; give up after the parse route's own time budget.
+  useEffect(() => {
+    if (phase !== 'parsing' || parseInFlight.current) return;
+    let elapsed = 0;
+    const interval = setInterval(async () => {
+      elapsed += 4000;
+      try {
+        const res = await fetch(`/api/receipts/${params.id}`);
+        if (!res.ok) return;
+        const data: ReceiptDetail = await res.json();
+        if (data.status !== 'processing') {
+          clearInterval(interval);
+          applyReceipt(data);
+          setPhase(data.status === 'uploaded' || data.status === 'failed' ? 'choice' : 'review');
+        } else if (elapsed >= 120000) {
+          clearInterval(interval);
+          setError('Parsing seems to be stuck. You can retry.');
+          setPhase('choice');
+        }
+      } catch {
+        // transient network error — keep polling
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [phase, params.id, applyReceipt]);
 
   function updateItem(index: number, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -353,7 +413,9 @@ export default function ReviewPage() {
   async function confirm() {
     setPhase('saving');
     setError('');
-    const res = await fetch(`/api/receipts/${params.id}`, {
+    let res: Response;
+    try {
+      res = await fetch(`/api/receipts/${params.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -371,7 +433,12 @@ export default function ReviewPage() {
         currency,
         items: items.map(toStoredItem),
       }),
-    });
+      });
+    } catch {
+      setError('Could not save — the server did not respond. Your edits are still here; try again.');
+      setPhase('review');
+      return;
+    }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error || 'Could not save.');
@@ -479,9 +546,13 @@ export default function ReviewPage() {
       {error && (
         <div className="bg-red-50 text-red-600 p-3 rounded text-sm flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => triggerParse('auto')} className="underline font-medium ml-4">
-            Retry
-          </button>
+          {/* Re-parse only fixes parse failures; after a failed save the user's
+              edits are still on screen and re-parsing would wipe them. */}
+          {phase === 'choice' && (
+            <button onClick={() => triggerParse('auto')} className="underline font-medium ml-4">
+              Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -752,8 +823,9 @@ export default function ReviewPage() {
                       <div>
                         <label className="block text-[10px] text-gray-400">Qty</label>
                         <input
-                          value={item.qty}
-                          onChange={(e) => updateItem(index, { qty: Number(e.target.value.replace(',', '.')) || 0 })}
+                          {...editableNumber(`${index}:qty`, String(item.qty), (text) =>
+                            updateItem(index, { qty: Number(text.replace(',', '.')) || 0 })
+                          )}
                           inputMode="decimal"
                           className={inputClass}
                         />
@@ -773,8 +845,9 @@ export default function ReviewPage() {
                       <div>
                         <label className="block text-[10px] text-gray-400">Unit price</label>
                         <input
-                          value={oreToInput(item.unitPriceOre)}
-                          onChange={(e) => updateItem(index, { unitPriceOre: inputToOre(e.target.value) })}
+                          {...editableNumber(`${index}:unitPrice`, oreToInput(item.unitPriceOre), (text) =>
+                            updateItem(index, { unitPriceOre: inputToOre(text) })
+                          )}
                           inputMode="decimal"
                           className={inputClass}
                         />
@@ -782,8 +855,9 @@ export default function ReviewPage() {
                       <div>
                         <label className="block text-[10px] text-gray-400">Line total</label>
                         <input
-                          value={oreToInput(item.lineTotalOre)}
-                          onChange={(e) => updateItem(index, { lineTotalOre: inputToOre(e.target.value) ?? 0 })}
+                          {...editableNumber(`${index}:lineTotal`, oreToInput(item.lineTotalOre), (text) =>
+                            updateItem(index, { lineTotalOre: inputToOre(text) ?? 0 })
+                          )}
                           inputMode="decimal"
                           className={inputClass}
                         />
@@ -823,9 +897,10 @@ export default function ReviewPage() {
                         <label className="block text-[10px] text-gray-400">Offer qty</label>
                         <input
                           value={item.offerQty ?? ''}
-                          onChange={(e) =>
-                            updateItem(index, { offerQty: e.target.value ? Number(e.target.value) : null })
-                          }
+                          onChange={(e) => {
+                            const n = Math.trunc(Number(e.target.value));
+                            updateItem(index, { offerQty: Number.isInteger(n) && n > 0 ? n : null });
+                          }}
                           inputMode="numeric"
                           className={inputClass}
                         />
@@ -833,8 +908,9 @@ export default function ReviewPage() {
                       <div>
                         <label className="block text-[10px] text-gray-400">Offer total</label>
                         <input
-                          value={oreToInput(item.offerTotalOre)}
-                          onChange={(e) => updateItem(index, { offerTotalOre: inputToOre(e.target.value) })}
+                          {...editableNumber(`${index}:offerTotal`, oreToInput(item.offerTotalOre), (text) =>
+                            updateItem(index, { offerTotalOre: inputToOre(text) })
+                          )}
                           inputMode="decimal"
                           className={inputClass}
                         />
@@ -842,8 +918,9 @@ export default function ReviewPage() {
                       <div>
                         <label className="block text-[10px] text-gray-400">Discount</label>
                         <input
-                          value={oreToInput(item.discountOre)}
-                          onChange={(e) => updateItem(index, { discountOre: inputToOre(e.target.value) ?? 0 })}
+                          {...editableNumber(`${index}:discount`, oreToInput(item.discountOre), (text) =>
+                            updateItem(index, { discountOre: inputToOre(text) ?? 0 })
+                          )}
                           inputMode="decimal"
                           className={inputClass}
                         />
@@ -851,8 +928,9 @@ export default function ReviewPage() {
                       <div>
                         <label className="block text-[10px] text-gray-400">Pant</label>
                         <input
-                          value={oreToInput(item.pantOre)}
-                          onChange={(e) => updateItem(index, { pantOre: inputToOre(e.target.value) ?? 0 })}
+                          {...editableNumber(`${index}:pant`, oreToInput(item.pantOre), (text) =>
+                            updateItem(index, { pantOre: inputToOre(text) ?? 0 })
+                          )}
                           inputMode="decimal"
                           className={inputClass}
                         />

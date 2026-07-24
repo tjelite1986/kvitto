@@ -32,6 +32,13 @@ export interface StoreDetection {
 // signal, since the rule was set explicitly by the user.
 export const KEYWORD_MATCH_CONFIDENCE = 0.99;
 
+// Normalized text is space-separated, so a word-boundary check is a padded
+// substring match. A plain includes() would let a short keyword like "ica"
+// fire inside "american express" on any receipt's payment section.
+function includesAsWords(haystack: string, needle: string): boolean {
+  return ` ${haystack} `.includes(` ${needle} `);
+}
+
 /**
  * Match the receipt against stored data. `fullText` (whole OCR text) is used for
  * user-taught keyword rules; `header` (first lines) for fingerprint/name match.
@@ -51,7 +58,7 @@ export function detectStore(header: string, fullText?: string): StoreDetection |
     .innerJoin(stores, eq(storeKeywords.storeId, stores.id))
     .all();
   for (const k of keywords) {
-    if (k.keyword && haystack.includes(k.keyword)) {
+    if (k.keyword && includesAsWords(haystack, k.keyword)) {
       return { storeId: k.storeId, storeName: k.storeName, confidence: KEYWORD_MATCH_CONFIDENCE };
     }
   }
@@ -80,7 +87,7 @@ export function detectStore(header: string, fullText?: string): StoreDetection |
     const allStores = db.select().from(stores).all();
     for (const store of allStores) {
       const name = normalizeText(store.name);
-      if (name && header.includes(name)) {
+      if (name && includesAsWords(header, name)) {
         best = { storeId: store.id, storeName: store.name, confidence: 0.5 };
         break;
       }

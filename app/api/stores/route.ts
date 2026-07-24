@@ -38,8 +38,16 @@ export async function GET() {
     examples: string;
   }>;
 
+  const exampleCount = (examples: string) => {
+    try {
+      const parsed = JSON.parse(examples);
+      return Array.isArray(parsed) ? parsed.length : 0;
+    } catch {
+      return 0;
+    }
+  };
   return NextResponse.json(
-    rows.map((r) => ({ ...r, exampleCount: JSON.parse(r.examples).length, examples: undefined }))
+    rows.map((r) => ({ ...r, exampleCount: exampleCount(r.examples), examples: undefined }))
   );
 }
 

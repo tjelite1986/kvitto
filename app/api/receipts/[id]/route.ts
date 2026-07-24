@@ -44,6 +44,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
   const receipt = getOwnedReceipt(Number(params.id), userId);
   if (!receipt) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (receipt.status === 'processing') {
+    return NextResponse.json(
+      { error: 'A parse is in progress. Wait for it to finish before confirming.' },
+      { status: 409 }
+    );
+  }
 
   const body = await req.json();
   const {
@@ -56,13 +62,45 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (items.length === 0) {
     return NextResponse.json({ error: 'At least one item is required' }, { status: 400 });
   }
+  // Money is ALWAYS integer öre. Reject floats/NaN before they reach SQLite,
+  // where REAL values or NULLs would silently corrupt sums and price history.
+  const isOre = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
+  const isOreOrNull = (v: unknown) => v == null || isOre(v);
   for (const item of items) {
-    if (!item.rawText || typeof item.lineTotalOre !== 'number') {
+    if (!item.rawText || !isOre(item.lineTotalOre)) {
       return NextResponse.json(
-        { error: 'Every item needs a name and a line total' },
+        { error: 'Every item needs a name and an integer öre line total' },
         { status: 400 }
       );
     }
+    if (
+      !isOreOrNull(item.unitPriceOre) ||
+      !isOreOrNull(item.offerTotalOre) ||
+      !isOreOrNull(item.discountOre) ||
+      !isOreOrNull(item.pantOre) ||
+      !(item.offerQty == null || (Number.isInteger(item.offerQty) && item.offerQty > 0)) ||
+      !(item.qty == null || (typeof item.qty === 'number' && Number.isFinite(item.qty) && item.qty > 0))
+    ) {
+      return NextResponse.json(
+        { error: `Invalid amount on item "${item.rawText}"` },
+        { status: 400 }
+      );
+    }
+  }
+  if (
+    !isOreOrNull(totalOre) ||
+    !isOreOrNull(pantReturnOre) ||
+    !isOreOrNull(deliveryFeeOre) ||
+    !isOreOrNull(serviceFeeOre)
+  ) {
+    return NextResponse.json({ error: 'Amounts must be integer öre' }, { status: 400 });
+  }
+  if (typeof purchaseDate === 'string' && purchaseDate && !/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)) {
+    return NextResponse.json({ error: 'purchaseDate must be YYYY-MM-DD' }, { status: 400 });
+  }
+  if (typeof storeId === 'number') {
+    const store = db.select().from(stores).where(eq(stores.id, storeId)).get();
+    if (!store) return NextResponse.json({ error: 'Unknown store' }, { status: 400 });
   }
 
   const confirm = sqlite.transaction(() => {
@@ -201,7 +239,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         storeId: resolvedStoreId,
         channel: channel !== undefined ? channel : receipt.channel,
         currency: 'currency' in body ? coerceCurrency(currency) : receipt.currency,
-        purchaseDate: typeof purchaseDate === 'string' ? purchaseDate : null,
+        purchaseDate: typeof purchaseDate === 'string' && purchaseDate ? purchaseDate : null,
         purchaseTime: typeof purchaseTime === 'string' && purchaseTime ? purchaseTime : null,
         receiptNumber: typeof receiptNumber === 'string' && receiptNumber.trim() ? receiptNumber.trim() : null,
         totalOre: typeof totalOre === 'number' ? totalOre : null,

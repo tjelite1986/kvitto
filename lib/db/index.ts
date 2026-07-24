@@ -12,6 +12,9 @@ if (!fs.existsSync(dbDir)) {
 
 const dbPath = path.join(dbDir, 'kvitto.db');
 export const sqlite = new Database(dbPath);
+// busy_timeout FIRST: the journal_mode switch itself needs the write lock, and
+// parallel next-build workers open this DB concurrently.
+sqlite.pragma('busy_timeout = 5000');
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
 
