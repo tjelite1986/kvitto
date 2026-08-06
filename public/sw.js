@@ -1,4 +1,5 @@
-const CACHE = "kvitto-v1";
+// v2: the SVG icon was replaced by a PNG icon set — bump so the cached SVG goes.
+const CACHE = "kvitto-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
