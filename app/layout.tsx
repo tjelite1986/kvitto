@@ -19,9 +19,9 @@ export const metadata: Metadata = {
     title: 'Kvitto',
   },
   icons: {
-    icon: '/favicon-32.png',
-    apple: '/apple-touch-icon.png',
-    shortcut: '/favicon-32.png',
+    icon: '/favicon-32.png?v=2',
+    apple: '/apple-touch-icon.png?v=2',
+    shortcut: '/favicon-32.png?v=2',
   },
 };
 
