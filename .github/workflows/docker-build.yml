@@ -5,6 +5,10 @@ on:
     branches:
       - master
       - main
+    # A doc-only change should not spend two native runners on a rebuild.
+    # Only skips a push whose every file matches.
+    paths-ignore:
+      - 'CLAUDE.md'
   release:
     types: [published]
 
