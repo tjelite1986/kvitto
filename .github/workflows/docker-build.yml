@@ -9,6 +9,7 @@ on:
     # Only skips a push whose every file matches.
     paths-ignore:
       - 'CLAUDE.md'
+      - 'README.md'
   release:
     types: [published]
 

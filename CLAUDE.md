@@ -85,4 +85,4 @@ Never `docker compose build` — the image comes from CI. Traefik serves
 https://kvitto.mecloud.win. Volume `kvitto_data:/app/data` = db + receipt images.
 Verify after deploy: `docker exec kvitto tesseract --list-langs` shows `swe`.
 CI skips the build when *every* file in a push matches `paths-ignore`
-(`CLAUDE.md`); a push that also touches code still builds.
+(`CLAUDE.md`, `README.md`); a push that also touches code still builds.
