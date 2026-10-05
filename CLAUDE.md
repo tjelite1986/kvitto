@@ -76,12 +76,12 @@ and a receipt stuck in `processing` with no in-flight parse is re-parsed.
 ## Deploy
 ```bash
 git push origin master   # CI builds ghcr.io/tjelite1986/kvitto (multi-arch)
-cd /home/thomas/docker2/compose/kvitto && docker compose pull && docker compose up -d
+cd <compose dir for kvitto on the host> && docker compose pull && docker compose up -d
 ```
 CI builds amd64 and arm64 on native runners (no QEMU) and merges the digests
 into one manifest, so `latest` only moves when both arches are built.
 Never `docker compose build` — the image comes from CI. Traefik serves
-https://kvitto.mecloud.win. Volume `kvitto_data:/app/data` = db + receipt images.
+the public hostname. Volume `kvitto_data:/app/data` = db + receipt images.
 Verify after deploy: `docker exec kvitto tesseract --list-langs` shows `swe`.
 CI skips the build when *every* file in a push matches `paths-ignore`
 (`CLAUDE.md`, `README.md`); a push that also touches code still builds.
