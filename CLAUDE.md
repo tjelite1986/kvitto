@@ -70,7 +70,6 @@ and a receipt stuck in `processing` with no in-flight parse is re-parsed.
   swe+eng traineddata AND `configs/` (tsv config) — without configs/ the TSV
   output silently becomes empty ("Can't open tsv").
 - Dev server: `PORT=3001 npm start` (port 3000 is kundbeställning's).
-- Test login: tjelite1986@gmail.com / (same pw as elite-v2 accounts).
 - Synthetic test receipts: sharp can rasterize an SVG receipt; tesseract reads
   it fine (see scratchpad make-receipt.js pattern).
 
@@ -111,3 +110,41 @@ CI skips the build when *every* file in a push matches `paths-ignore`
   touching. Run `prettier --check` before `prettier --write` on an older file.
 - **Archive, don't delete:** don't delete branches; tag them `archive/<name>`
   first.
+
+## Lessons learned
+
+### Receipt semantics (decided with the owner, do not undo)
+- PANTRETUR/RETURPANT (returning empties) is a receipt-level refund, not a purchase. It is never an item, never linkable to a product and never in price history. `PANTRETUR_RE` must be checked before the PANT and discount rules in `lib/local-parser.ts`. Why: otherwise the negative amount folds into the previous item's discount.
+- A multi-buy printed as shelf price plus adjustment ("3 st x 10,00 30,00" / "3 FÖR 25,00 -5,00") is ONE item: qty 3, unit price, line total, offer 3/25,00, discount 0. Never book the same rebate in both `offer_*` and `discount_ore`.
+- Per-item savings are computed (`discount_ore + max(0, line_total - offer_total)`), never stored.
+- `hg` is an entry unit only: the review page converts it to kg on save (`toStoredItem()`), and the parser and AI prompt convert it too. DB and API stay `pc | kg`.
+- Purchase channel is per receipt (`receipts.channel`). `stores.channel` is only a default that seeds a new store and must never be overwritten from a receipt. Why: the same store sells both in-store and online, and overwriting made it flip-flop. Store category stays store-level.
+- Amounts in different currencies are never summed or compared. Price trends, latest/previous price and monthly spend are partitioned per currency (and per unit: kg and pc prices never compare).
+
+### Local parser
+- Container tesseract sometimes writes prices with inner whitespace ("29, 90"). Every money regex must allow `\s?` around the decimal separator, or the checksum fails and every receipt silently falls back to the paid AI parser.
+- Fee regexes (`DELIVERY_FEE_RE`, `SERVICE_FEE_RE`) only consume a line that has a price, so addresses and phone lines that contain the same words fall through. `RECEIPT_NO_RE` requires an explicit number label and a digit-first value, so the bare "Kvitto <date>" header and the org number don't match.
+- Prefer ATT BETALA/TOTALT over a SUMMA subtotal, and ignore lines after the totals section.
+
+### AI structured output
+- Anthropic's json_schema validator (direct or via OpenRouter) rejects `enum` combined with `type: ['string', 'null']`, and every parse then returns 400. For nullable choice fields, drop `enum` and list the allowed values in `description`; validate server-side. Non-null enums (like item `unit`) are fine.
+- Nullable fields let the model decline: prompts say "null if unknown, never guess". Keep that; an invented brand or amount pollutes the shared product DB.
+- OpenRouter and the Anthropic SDK differ in more than the base URL: image block shape, structured-output field (`response_format.json_schema` vs `output_config.format`) and how a refusal surfaces. Keep both paths in `lib/claude.ts` working. Verify an OpenRouter model id against its public model list, because a wrong id only fails at runtime.
+
+### Database
+- `receipt_items.product_id` has no cascade (FK is RESTRICT). Deleting or merging a product must null or repoint `receipt_items.product_id` first. Aliases do cascade.
+- Product merge keeps each source product's name as a global alias so future scans still link, and must dedupe against the unique `(store_id, alias_text)` index.
+- Seed tables (`product_categories` from `DEFAULT_PRODUCT_CATEGORIES`) only when empty; never re-seed or overwrite user edits. `products.category` stores the name as free text, so deleting a category never touches products, and `ProductCategorySelect` always injects the current value as an option so legacy or AI values aren't dropped.
+- `next build` runs `bootstrapSchema()` in parallel workers against the same file. Keep the `duplicate column name` catch in `addColumnIfMissing()` and `busy_timeout` before the WAL switch; don't go back to bare guarded ALTERs.
+- Parse and confirm can race. Confirm rejects while a parse is in flight, and the parse route re-checks status in a transaction before persisting, so the user's confirmed data always wins. Keep both guards when touching either route.
+
+### Upload and rendering
+- Digital PDF receipts often don't embed fonts. The runner image needs fontconfig + `font-urw-base35`, or `pdftoppm` renders blank white pages. Don't slim those packages out of the Dockerfile.
+
+### Review UI
+- Money and qty inputs keep the exact typed text while focused. Re-formatting on every keystroke swallowed digits. Empty money fields stay `null`, not 0.
+- "Retry" after a failed save must not re-parse; that wiped the user's manual corrections.
+- `ProductPicker` sizes its overlay from `window.visualViewport` (top/height) and the sheet uses `max-h-full`. Don't go back to `max-h-[85vh]`: the mobile keyboard doesn't shrink the layout viewport, so the sheet ends up behind it. The search input deliberately has no `autoFocus`.
+
+### Auth and PWA
+- `middleware.ts` excludes public assets by exact filename. Adding or renaming an icon, the manifest or the SW without updating the matcher puts it behind the login (the manifest was once gated this way). Icon URLs carry `?v=N`; bump it when icons change, or installed PWAs keep the old icon.
